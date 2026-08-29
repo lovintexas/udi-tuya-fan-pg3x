@@ -157,7 +157,7 @@ class Controller(udi_interface.Node):
     id = "tuyafanctrl"
 
     drivers = [
-        {"driver": "ST", "value": 1, "uom": 25},
+        {"driver": "ST", "value": 0, "uom": 25},
     ]
 
     def __init__(self, polyglot):
@@ -170,10 +170,15 @@ class Controller(udi_interface.Node):
 
         self.poly = polyglot
         self.fans = []
+        self.params = {}
 
     def configure(self, params):
-        self.params = dict(params)
-        LOGGER.info("Tuya Fan configuration updated")
+        self.params = {
+            str(key).strip(): value
+            for key, value in dict(params).items()
+            if str(key).strip()
+        }
+        LOGGER.info("Tuya Fan configuration updated; restart required to apply changes")
 
     def start(self):
         try:
@@ -183,13 +188,33 @@ class Controller(udi_interface.Node):
             for num in range(1, 17):
                 prefix = f"fan{num}_"
 
-                name = self.params.get(prefix + "name") if hasattr(self, "params") else None
-                device_id = self.params.get(prefix + "id") if hasattr(self, "params") else None
-                ip = self.params.get(prefix + "ip") if hasattr(self, "params") else None
-                key = self.params.get(prefix + "key") if hasattr(self, "params") else None
-                version = self.params.get(prefix + "version", "3.4") if hasattr(self, "params") else "3.4"
+                name = self.params.get(prefix + "name")
+                device_id = self.params.get(prefix + "id")
+                ip = self.params.get(prefix + "ip")
+                key = self.params.get(prefix + "key")
+                version = self.params.get(prefix + "version", "3.4")
 
-                if name and device_id and ip and key:
+                # Trim ordinary text fields. Do not modify the Tuya local key.
+                if isinstance(name, str):
+                    name = name.strip()
+                if isinstance(device_id, str):
+                    device_id = device_id.strip()
+                if isinstance(ip, str):
+                    ip = ip.strip()
+                if isinstance(version, str):
+                    version = version.strip()
+
+                values = (name, device_id, ip, key)
+
+                if any(values) and not all(values):
+                    LOGGER.warning(
+                        "Incomplete configuration for fan%d; "
+                        "name, id, ip and key are required",
+                        num
+                    )
+                    continue
+
+                if all(values):
                     fan_configs.append({
                         "name": name,
                         "address": f"fan{num}",
@@ -228,6 +253,8 @@ class Controller(udi_interface.Node):
                         "%s initialized successfully",
                         config["name"]
                     )
+
+                    self.setDriver("ST", 1)
 
                     # Give PG3x/IoX time to finish registering this node
                     # before submitting the next child node.
