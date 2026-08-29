@@ -180,7 +180,7 @@ class Controller(udi_interface.Node):
             fan_configs = []
 
             # Prefer PG3x Custom Parameters.
-            for num in (1, 2):
+            for num in range(1, 17):
                 prefix = f"fan{num}_"
 
                 name = self.params.get(prefix + "name") if hasattr(self, "params") else None
