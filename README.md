@@ -119,7 +119,7 @@ Configuration is stored in PG3x Custom Parameters rather than in this repository
 
 ## Version
 
-Current version: 1.1.1
+Current version: 1.1.2
 
 ## Obtaining Your Tuya Device Information
 

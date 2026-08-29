@@ -336,7 +336,7 @@ if __name__ == "__main__":
     try:
         polyglot = udi_interface.Interface([])
 
-        polyglot.start("1.1.1")
+        polyglot.start("1.1.2")
 
         polyglot.subscribe(
             polyglot.CUSTOMPARAMS,
