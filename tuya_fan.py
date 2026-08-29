@@ -81,7 +81,7 @@ class TuyaFan(udi_interface.Node):
 
             if "dps" not in result:
                 LOGGER.error(f"{self.name}: bad status response: {result}")
-                return
+                return False
 
             dps = result["dps"]
 
@@ -94,9 +94,11 @@ class TuyaFan(udi_interface.Node):
             self.setDriver("GV6", TIMER_TO_ISY.get(dps.get("22"), 0))
 
             LOGGER.debug(f"{self.name}: DPS {dps}")
+            return True
 
         except Exception as ex:
             LOGGER.error(f"{self.name}: query failed: {ex}")
+            return False
 
     def _set(self, dps, value):
         try:
@@ -247,14 +249,15 @@ class Controller(udi_interface.Node):
                     self.poly.addNode(fan)
                     self.fans.append(fan)
 
-                    fan.query()
+                    connected = fan.query()
 
                     LOGGER.info(
                         "%s initialized successfully",
                         config["name"]
                     )
 
-                    self.setDriver("ST", 1)
+                    if connected:
+                        self.setDriver("ST", 1)
 
                     # Give PG3x/IoX time to finish registering this node
                     # before submitting the next child node.
