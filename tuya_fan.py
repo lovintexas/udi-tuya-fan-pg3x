@@ -172,32 +172,73 @@ class Controller(udi_interface.Node):
         self.poly = polyglot
         self.fans = []
 
+    def configure(self, params):
+        self.params = dict(params)
+        LOGGER.info("Tuya Fan configuration updated")
+
     def start(self):
         try:
-            with open("/home/admin/devices.json", "r") as f:
-                devices = json.load(f)
+            fan_configs = []
 
-            fan_configs = (
-                ("Patio Fan East", "fan_east"),
-                ("Patio Fan West", "fan_west"),
-            )
+            # Prefer PG3x Custom Parameters.
+            for num in (1, 2):
+                prefix = f"fan{num}_"
 
-            for device_name, address in fan_configs:
-                try:
+                name = self.params.get(prefix + "name") if hasattr(self, "params") else None
+                device_id = self.params.get(prefix + "id") if hasattr(self, "params") else None
+                ip = self.params.get(prefix + "ip") if hasattr(self, "params") else None
+                key = self.params.get(prefix + "key") if hasattr(self, "params") else None
+                version = self.params.get(prefix + "version", "3.4") if hasattr(self, "params") else "3.4"
+
+                if name and device_id and ip and key:
+                    fan_configs.append({
+                        "name": name,
+                        "address": "fan_east" if num == 1 else "fan_west",
+                        "id": device_id,
+                        "ip": ip,
+                        "key": key,
+                        "version": version or "3.4",
+                    })
+
+            # During development, retain the known-working devices.json setup
+            # when no Custom Parameters have been configured.
+            if not fan_configs:
+                LOGGER.info("No fan Custom Parameters found; using devices.json fallback")
+
+                with open("/home/admin/devices.json", "r") as f:
+                    devices = json.load(f)
+
+                legacy_configs = (
+                    ("Patio Fan East", "fan_east"),
+                    ("Patio Fan West", "fan_west"),
+                )
+
+                for device_name, address in legacy_configs:
                     info = next(
                         d for d in devices
                         if d["name"] == device_name
                     )
 
+                    fan_configs.append({
+                        "name": device_name,
+                        "address": address,
+                        "id": info["id"],
+                        "ip": info["ip"],
+                        "key": info["key"],
+                        "version": info["version"],
+                    })
+
+            for config in fan_configs:
+                try:
                     fan = TuyaFan(
                         self.poly,
                         "controller",
-                        address,
-                        device_name,
-                        info["id"],
-                        info["ip"],
-                        info["key"],
-                        info["version"],
+                        config["address"],
+                        config["name"],
+                        config["id"],
+                        config["ip"],
+                        config["key"],
+                        config["version"],
                     )
 
                     self.poly.addNode(fan)
@@ -205,14 +246,20 @@ class Controller(udi_interface.Node):
 
                     fan.query()
 
-                    LOGGER.info("%s initialized successfully", device_name)
+                    LOGGER.info(
+                        "%s initialized successfully",
+                        config["name"]
+                    )
 
                     # Give PG3x/IoX time to finish registering this node
                     # before submitting the next child node.
                     time.sleep(1)
 
                 except Exception:
-                    LOGGER.exception("Failed to initialize %s", device_name)
+                    LOGGER.exception(
+                        "Failed to initialize %s",
+                        config["name"]
+                    )
 
         except Exception as ex:
             LOGGER.error(f"Controller start failed: {ex}")
@@ -232,8 +279,26 @@ class Controller(udi_interface.Node):
 
 
 
+controller = None
+pending_params = {}
+
+
+def custom_params_handler(params):
+    global pending_params
+
+    LOGGER.info("Received custom parameters")
+    pending_params = dict(params)
+
+    if controller is not None:
+        controller.configure(pending_params)
+
+
+
 def poll_handler(poll_type):
     if poll_type != "shortPoll":
+        return
+
+    if controller is None:
         return
 
     try:
@@ -254,6 +319,11 @@ if __name__ == "__main__":
         polyglot.start("1.0.0")
 
         polyglot.subscribe(
+            polyglot.CUSTOMPARAMS,
+            custom_params_handler
+        )
+
+        polyglot.subscribe(
             polyglot.POLL,
             poll_handler
         )
@@ -267,6 +337,7 @@ if __name__ == "__main__":
         polyglot.updateProfile()
 
         controller = Controller(polyglot)
+        controller.configure(pending_params)
         polyglot.addNode(controller)
 
         time.sleep(1)
