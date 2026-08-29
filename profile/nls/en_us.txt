@@ -40,3 +40,6 @@ FANTIMER-4 = 8 Hours
 
 ONOFFSTATE-0 = Off
 ONOFFSTATE-1 = On
+
+ND-tuyafan-ICON=GenericCtl
+ND-tuyafanctrl-ICON=GenericCtl
