@@ -192,7 +192,7 @@ class Controller(udi_interface.Node):
                 if name and device_id and ip and key:
                     fan_configs.append({
                         "name": name,
-                        "address": "fan_east" if num == 1 else "fan_west",
+                        "address": f"fan{num}",
                         "id": device_id,
                         "ip": ip,
                         "key": key,
