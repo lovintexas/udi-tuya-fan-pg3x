@@ -1,0 +1,42 @@
+ND-tuyafanctrl-NAME = Tuya Fan Controller
+ND-tuyafan-NAME = Tuya Ceiling Fan
+
+ST-tuyafan-ST-NAME = Fan
+ST-tuyafan-GV1-NAME = Speed
+ST-tuyafan-GV2-NAME = Mode
+ST-tuyafan-GV3-NAME = Direction
+ST-tuyafan-GV4-NAME = Light
+ST-tuyafan-GV5-NAME = Brightness
+ST-tuyafan-GV6-NAME = Stop Timer
+
+CMD-tuyafan-DON-NAME = Fan On
+CMD-tuyafan-DOF-NAME = Fan Off
+CMD-tuyafan-SET_SPEED-NAME = Set Speed
+CMD-tuyafan-SET_MODE-NAME = Set Mode
+CMD-tuyafan-SET_DIRECTION-NAME = Set Direction
+CMD-tuyafan-LIGHT_ON-NAME = Light On
+CMD-tuyafan-LIGHT_OFF-NAME = Light Off
+CMD-tuyafan-SET_BRIGHTNESS-NAME = Set Brightness
+CMD-tuyafan-SET_TIMER-NAME = Set Stop Timer
+CMD-tuyafan-QUERY-NAME = Query
+
+CMD-tuyafanctrl-QUERY-NAME = Query
+
+CONNECTIONSTATE-0 = Not Connected
+CONNECTIONSTATE-1 = Connected
+
+FANMODE-0 = Normal
+FANMODE-1 = Sleep
+FANMODE-2 = Natural
+
+FANDIRECTION-0 = Forward
+FANDIRECTION-1 = Reverse
+
+FANTIMER-0 = Off
+FANTIMER-1 = 1 Hour
+FANTIMER-2 = 2 Hours
+FANTIMER-3 = 4 Hours
+FANTIMER-4 = 8 Hours
+
+ONOFFSTATE-0 = Off
+ONOFFSTATE-1 = On

@@ -1,0 +1,29 @@
+<editors>
+  <editor id="onoffstate">
+    <range uom="25" subset="0-1" nls="ONOFFSTATE"/>
+  </editor>
+
+  <editor id="connectionstate">
+    <range uom="25" subset="0-1" nls="CONNECTIONSTATE"/>
+  </editor>
+
+  <editor id="fanspeed">
+    <range uom="25" subset="1-6"/>
+  </editor>
+
+  <editor id="fanmode">
+    <range uom="25" subset="0-2" nls="FANMODE"/>
+  </editor>
+
+  <editor id="fandirection">
+    <range uom="25" subset="0-1" nls="FANDIRECTION"/>
+  </editor>
+
+  <editor id="brightness">
+    <range uom="51" min="0" max="100" step="1"/>
+  </editor>
+
+  <editor id="fantimer">
+    <range uom="25" subset="0-4" nls="FANTIMER"/>
+  </editor>
+</editors>

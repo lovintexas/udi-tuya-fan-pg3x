@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+logs/
+NSplugin_*.lock
+plugin_*.cert
+plugin_*.key
+svc.pid

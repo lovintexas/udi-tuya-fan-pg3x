@@ -1,0 +1,61 @@
+<nodeDefs>
+
+  <nodeDef id="tuyafanctrl" nls="tuyafanctrl">
+    <sts>
+      <st id="ST" editor="connectionstate"/>
+    </sts>
+    <cmds>
+      <sends/>
+      <accepts>
+        <cmd id="QUERY"/>
+      </accepts>
+    </cmds>
+  </nodeDef>
+
+  <nodeDef id="tuyafan" nls="tuyafan">
+    <sts>
+      <st id="ST" editor="onoffstate"/>
+      <st id="GV1" editor="fanspeed"/>
+      <st id="GV2" editor="fanmode"/>
+      <st id="GV3" editor="fandirection"/>
+      <st id="GV4" editor="onoffstate"/>
+      <st id="GV5" editor="brightness"/>
+      <st id="GV6" editor="fantimer"/>
+    </sts>
+
+    <cmds>
+      <sends/>
+
+      <accepts>
+        <cmd id="DON"/>
+        <cmd id="DOF"/>
+
+        <cmd id="SET_SPEED">
+          <p id="" editor="fanspeed"/>
+        </cmd>
+
+        <cmd id="SET_MODE">
+          <p id="" editor="fanmode"/>
+        </cmd>
+
+        <cmd id="SET_DIRECTION">
+          <p id="" editor="fandirection"/>
+        </cmd>
+
+        <cmd id="LIGHT_ON"/>
+        <cmd id="LIGHT_OFF"/>
+
+        <cmd id="SET_BRIGHTNESS">
+          <p id="" editor="brightness"/>
+        </cmd>
+
+        <cmd id="SET_TIMER">
+          <p id="" editor="fantimer"/>
+        </cmd>
+
+        <cmd id="QUERY"/>
+      </accepts>
+    </cmds>
+  </nodeDef>
+
+</nodeDefs>
