@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 
-import json
 import time
 import tinytuya
 import udi_interface
@@ -200,33 +199,12 @@ class Controller(udi_interface.Node):
                         "version": version or "3.4",
                     })
 
-            # During development, retain the known-working devices.json setup
-            # when no Custom Parameters have been configured.
             if not fan_configs:
-                LOGGER.info("No fan Custom Parameters found; using devices.json fallback")
-
-                with open("/home/admin/devices.json", "r") as f:
-                    devices = json.load(f)
-
-                legacy_configs = (
-                    ("Patio Fan East", "fan_east"),
-                    ("Patio Fan West", "fan_west"),
+                LOGGER.warning(
+                    "No complete Tuya fan configuration found in Custom Parameters"
                 )
-
-                for device_name, address in legacy_configs:
-                    info = next(
-                        d for d in devices
-                        if d["name"] == device_name
-                    )
-
-                    fan_configs.append({
-                        "name": device_name,
-                        "address": address,
-                        "id": info["id"],
-                        "ip": info["ip"],
-                        "key": info["key"],
-                        "version": info["version"],
-                    })
+                self.setDriver("ST", 0)
+                return
 
             for config in fan_configs:
                 try:
