@@ -220,7 +220,10 @@ class Controller(udi_interface.Node):
 
     def query(self, command=None):
         for fan in self.fans:
-            fan.query()
+            try:
+                fan.query()
+            except Exception:
+                LOGGER.exception("Failed to query %s", fan.name)
 
     commands = {
         "QUERY": query,
