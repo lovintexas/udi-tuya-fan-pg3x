@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import json
+import time
 import tinytuya
 import udi_interface
 
@@ -208,7 +209,6 @@ class Controller(udi_interface.Node):
 
                     # Give PG3x/IoX time to finish registering this node
                     # before submitting the next child node.
-                    import time
                     time.sleep(1)
 
                 except Exception:
@@ -269,7 +269,6 @@ if __name__ == "__main__":
         controller = Controller(polyglot)
         polyglot.addNode(controller)
 
-        import time
         time.sleep(1)
 
         controller.start()
