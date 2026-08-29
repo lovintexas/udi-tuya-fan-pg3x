@@ -230,8 +230,20 @@ class Controller(udi_interface.Node):
                 LOGGER.warning(
                     "No complete Tuya fan configuration found in Custom Parameters"
                 )
+
+                self.poly.Notices["setup"] = (
+                    "Tuya Fan setup required. Complete the fan1_name, fan1_id, "
+                    "fan1_ip, fan1_key, and fan1_version Custom Parameters below. "
+                    "Use fan2_*, fan3_*, etc. for additional fans, up to fan16_*. "
+                    "The tested Tuya protocol version is 3.4. Restart the plugin "
+                    "after saving changes. See Documentation for instructions on "
+                    "obtaining the Tuya Device ID and Local Key."
+                )
+
                 self.setDriver("ST", 0)
                 return
+
+            self.poly.Notices.delete("setup")
 
             for config in fan_configs:
                 try:
