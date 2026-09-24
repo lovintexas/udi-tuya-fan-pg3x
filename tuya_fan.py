@@ -116,6 +116,7 @@ class TuyaFan(udi_interface.Node):
 
     def set_speed(self, command):
         value = int(float(command.get("value", 1)))
+        self._set(1, True)
         self._set(3, value)
 
     def set_mode(self, command):
@@ -336,7 +337,7 @@ if __name__ == "__main__":
     try:
         polyglot = udi_interface.Interface([])
 
-        polyglot.start("1.1.2")
+        polyglot.start("1.1.3")
 
         polyglot.subscribe(
             polyglot.CUSTOMPARAMS,
