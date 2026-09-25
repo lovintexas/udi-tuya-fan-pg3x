@@ -116,8 +116,15 @@ class TuyaFan(udi_interface.Node):
 
     def set_speed(self, command):
         value = int(float(command.get("value", 1)))
-        self._set(1, True)
-        self._set(3, value)
+        try:
+            result = self.device.set_multiple_values({
+                "1": True,
+                "3": value
+            })
+            LOGGER.debug(f"{self.name}: set fan ON + speed {value}: {result}")
+            self.query()
+        except Exception as ex:
+            LOGGER.error(f"{self.name}: speed command failed: {ex}")
 
     def set_mode(self, command):
         value = int(float(command.get("value", 0)))
