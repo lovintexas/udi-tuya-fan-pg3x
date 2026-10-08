@@ -5,3 +5,11 @@ NSplugin_*.lock
 plugin_*.cert
 plugin_*.key
 svc.pid
+# TinyTuya local configuration / credentials
+devices.json
+snapshot.json
+tinytuya.json
+tuya-raw.json
+
+# Local backup files
+*.before-*

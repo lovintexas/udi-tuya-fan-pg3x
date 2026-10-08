@@ -74,6 +74,7 @@ class TuyaFan(udi_interface.Node):
             self.key
         )
         self.device.set_version(self.version)
+        self.device.set_socketPersistent(True)
 
     def query(self, command=None):
         try:
