@@ -1,10 +1,14 @@
-# Tuya Fan PG3x Plugin
+# Smart Life / Tuya Control PG3x Plugin
 
-Local LAN control of compatible Tuya ceiling fan controllers from Universal Devices eisy / PG3x.
+Local LAN control of compatible Smart Life and Tuya Wi-Fi devices from Universal Devices eisy / PG3x.
 
-This plugin uses TinyTuya for direct local communication with the fan controller. Tuya cloud access is not required during normal operation once the device ID and local key are known.
+Many devices sold for use with the **Smart Life** app are based on the Tuya platform even when the product, packaging, or instructions do not mention Tuya. This plugin supports compatible devices from either the Smart Life or Tuya Smart ecosystem.
+
+The plugin uses TinyTuya for direct local communication with supported devices. Tuya cloud access is needed to obtain the Device ID and Local Key during setup, but normal plugin operation is over the local LAN.
 
 ## Features
+
+### Ceiling fans
 
 Supported fan controls:
 
@@ -21,11 +25,25 @@ Supported fan controls:
   - 4 Hours
   - 8 Hours
 
-The plugin supports up to 16 fans.
+### Power-monitoring switches
+
+Supported switch controls and measurements:
+
+- Switch On / Off
+- Voltage
+- Current
+- Power
+- Accumulated energy
+- Fault status
+- Online status
+
+The plugin currently supports up to 16 fans and 16 power switches.
 
 ## Configuration
 
-Each fan is configured using PG3x Custom Parameters.
+Devices are configured using PG3x Custom Parameters.
+
+### Ceiling fans
 
 For fan 1:
 
@@ -35,21 +53,23 @@ For fan 1:
 - `fan1_key`
 - `fan1_version`
 
-For fan 2:
+For additional fans use `fan2_*`, `fan3_*`, etc., through `fan16_*`.
 
-- `fan2_name`
-- `fan2_id`
-- `fan2_ip`
-- `fan2_key`
-- `fan2_version`
+The tested fan controller uses Tuya protocol version `3.4`.
 
-Continue the same pattern through:
+### Power-monitoring switches
 
-- `fan16_name`
-- `fan16_id`
-- `fan16_ip`
-- `fan16_key`
-- `fan16_version`
+For switch 1:
+
+- `switch1_name`
+- `switch1_id`
+- `switch1_ip`
+- `switch1_key`
+- `switch1_version`
+
+For additional switches use `switch2_*`, `switch3_*`, etc., through `switch16_*`.
+
+The tested Smart Life power-monitoring switch uses Tuya protocol version `3.5`.
 
 ### Parameter meanings
 
@@ -57,22 +77,24 @@ Continue the same pattern through:
 : Display name shown in IoX.
 
 `id`
-: Tuya device ID.
+: Tuya Device ID.
 
 `ip`
-: Local IP address of the fan controller.
+: Local IP address of the device.
 
 `key`
-: Tuya local key.
+: Tuya Local Key.
 
 `version`
-: Tuya protocol version. The tested controllers use `3.4`.
+: Tuya local protocol version.
 
-Only complete fan entries are loaded. A fan requires at least `name`, `id`, `ip`, and `key`.
+Only complete device entries are loaded. Each configured device requires `name`, `id`, `ip`, and `key`.
 
 After changing Custom Parameters, restart the plugin to apply the new configuration.
 
 ## Tested Hardware
+
+### Ceiling fan
 
 Tested with a Tuya-based ceiling fan controller:
 
@@ -80,9 +102,7 @@ Tested with a Tuya-based ceiling fan controller:
 - Manufacturer: Shenzhen Funpower General Technology Co., Ltd.
 - Tuya protocol: 3.4
 
-Other Tuya ceiling fan controllers may work if they use the same DPS mapping.
-
-## DPS Mapping
+Fan DPS mapping:
 
 | DPS | Function |
 |---|---|
@@ -94,12 +114,41 @@ Other Tuya ceiling fan controllers may work if they use the same DPS mapping.
 | 16 | Light brightness |
 | 22 | Stop timer |
 
-Expected values:
+Expected fan values:
 
 - Mode: `normal`, `sleep`, `nature`
 - Speed: `1` through `6`
 - Direction: `forward`, `reverse`
 - Timer: `off`, `1hour`, `2hour`, `4hour`, `8hour`
+
+Other ceiling fan controllers may work if they use the same DPS mapping.
+
+### Smart Life power-monitoring switch
+
+Tested with a Smart Life Wi-Fi power-monitoring switch using Tuya protocol 3.5.
+
+Switch DPS mapping:
+
+| DPS | Function |
+|---|---|
+| 1 | Relay power |
+| 17 | Accumulated energy |
+| 18 | Current |
+| 19 | Power |
+| 20 | Voltage |
+| 26 | Fault status |
+| 66 | Online status |
+
+The tested device reports:
+
+- Energy in thousandths of kWh
+- Current in mA
+- Power in tenths of a watt
+- Voltage in tenths of a volt
+
+The plugin converts these values for display in IoX as kWh, A, W, and V.
+
+Other Smart Life / Tuya power-monitoring switches may work if they use the same DPS mapping.
 
 ## Requirements
 
@@ -119,28 +168,29 @@ Configuration is stored in PG3x Custom Parameters rather than in this repository
 
 ## Version
 
-Current version: 1.1.3
+Current version: 1.2.0
 
-## Obtaining Your Tuya Device Information
+## Obtaining Your Smart Life / Tuya Device Information
 
-Each fan requires the following five Custom Parameters:
-
-- `fan1_name` - The name you want displayed for the fan
-- `fan1_id` - Tuya Device ID
-- `fan1_ip` - Local IP address of the fan controller
-- `fan1_key` - Tuya Local Key
-- `fan1_version` - Tuya protocol version (3.4 for the tested controller)
+Each device requires five Custom Parameters. Use the `fan1_*` prefix for
+a supported ceiling fan or the `switch1_*` prefix for a supported
+power-monitoring switch.
 
 The Device ID and Local Key can be obtained using the TinyTuya setup
 wizard. The Tuya cloud is only needed to obtain this information.
 Normal operation of the plugin is entirely over the local LAN.
 
-### 1. Pair the Fan
+### 1. Pair the Device
 
-The fan must first be paired with a Tuya-compatible mobile app such as
-Smart Life or Tuya Smart.
+The device must first be paired with the Smart Life or Tuya Smart mobile
+app.
 
-Make sure the fan is working from the mobile app before continuing.
+A product may be advertised only as a **Smart Life** device and may not
+mention Tuya. Smart Life devices commonly use the Tuya platform and can
+be compatible with this plugin if their local protocol and DPS mapping
+are supported.
+
+Make sure the device is working from the mobile app before continuing.
 
 ### 2. Create a Tuya Developer Account
 
@@ -165,7 +215,7 @@ After creating the project, open its **Overview** page and locate:
 
 You will need these two values when running the TinyTuya wizard.
 
-### 3. Link Your Tuya App Account
+### 3. Link Your Smart Life or Tuya Smart App Account
 
 In your Tuya Cloud project:
 
@@ -198,13 +248,13 @@ including:
 
 TinyTuya will retrieve the registered devices and their Local Keys.
 
-When complete, it creates:
+When complete, it creates a `devices.json` file in the directory from
+which the wizard was run.
 
-    /home/admin/devices.json
+This file contains the device information and Local Keys needed by the
+plugin. Treat it as a credential file and do not commit or publish it.
 
-This file contains the information needed by the Tuya Fan plugin.
-
-### 5. Display the Fan Information
+### 5. Display the Device Information
 
 Run:
 
@@ -224,9 +274,9 @@ Run:
         print("Version: ", d.get("version"))
     PY
 
-Find the fan you want to configure.
+Find the device you want to configure.
 
-Copy its information into the plugin's Custom Parameters:
+For a ceiling fan, copy its information into:
 
     fan1_name
     fan1_id
@@ -242,20 +292,29 @@ For additional fans use:
     fan2_key
     fan2_version
 
-Continue with `fan3_*`, `fan4_*`, etc. The plugin supports up to 16
-fans.
+Continue with `fan3_*`, `fan4_*`, etc. for additional fans.
+
+For a power-monitoring switch use:
+
+    switch1_name
+    switch1_id
+    switch1_ip
+    switch1_key
+    switch1_version
+
+For additional switches use `switch2_*`, `switch3_*`, etc.
 
 After entering or changing the Custom Parameters, save the changes and
 restart the plugin.
 
 ### Important Notes
 
-The `fan*_key` value is a security credential. Keep your Tuya Local
-Keys private and do not post them in logs, screenshots, support
-requests, or public repositories.
+The `fan*_key` and `switch*_key` values are security credentials. Keep
+your Tuya Local Keys private and do not post them in logs, screenshots,
+support requests, or public repositories.
 
-It is recommended that each fan be assigned a DHCP reservation so its
-local IP address does not change.
+It is recommended that each device be assigned a DHCP reservation so
+its local IP address does not change.
 
 If a Tuya device is reset or removed and re-paired with the mobile app,
 its Local Key may change. Run the TinyTuya wizard again to obtain the

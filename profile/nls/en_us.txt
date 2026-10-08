@@ -1,4 +1,4 @@
-ND-tuyafanctrl-NAME = Tuya Fan Controller
+ND-tuyafanctrl-NAME = Smart Life / Tuya Controller
 ND-tuyafan-NAME = Tuya Ceiling Fan
 
 ST-tuyafan-ST-NAME = Fan

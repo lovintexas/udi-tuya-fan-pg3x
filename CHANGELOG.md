@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.2.0
+- Renamed the user-facing plugin to Smart Life / Tuya Control to make compatibility clearer for devices sold for use with the Smart Life app.
+- Added support for Smart Life / Tuya power-monitoring switches using the `switch1_*` through `switch16_*` Custom Parameters.
+- Added local relay On/Off control.
+- Added voltage, current, power, accumulated energy, fault, and online status reporting.
+- Added support for the tested Tuya protocol 3.5 power-monitoring switch while retaining existing protocol 3.4 ceiling fan support.
+- Added persistent TinyTuya sockets to reduce repeated connection setup and investigate intermittent local-interface lockups.
+- Added protection against accidentally committing TinyTuya credential and discovery files.
+
 ## 1.1.4
 - Fan Speed commands now send fan power ON and the requested speed in a single Tuya command, improving reliable speed changes when the fan is off.
 

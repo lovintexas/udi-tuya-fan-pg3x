@@ -270,7 +270,7 @@ class Controller(udi_interface.Node):
             polyglot,
             "controller",
             "controller",
-            "Tuya Fan Controller",
+            "Smart Life / Tuya Controller",
         )
 
         self.poly = polyglot
@@ -284,7 +284,7 @@ class Controller(udi_interface.Node):
             for key, value in dict(params).items()
             if str(key).strip()
         }
-        LOGGER.info("Tuya Fan configuration updated; restart required to apply changes")
+        LOGGER.info("Smart Life / Tuya configuration updated; restart required to apply changes")
 
     def start(self):
         try:
@@ -377,11 +377,11 @@ class Controller(udi_interface.Node):
                 )
 
                 self.poly.Notices["setup"] = (
-                    "Tuya Fan setup required. Complete the fan1_name, fan1_id, "
-                    "fan1_ip, fan1_key, and fan1_version Custom Parameters below. "
-                    "Use fan2_*, fan3_*, etc. for additional fans, up to fan16_*. "
-                    "The tested Tuya protocol version is 3.4. Restart the plugin "
-                    "after saving changes. See Documentation for instructions on "
+                    "Smart Life / Tuya setup required. Configure fan1_* for "
+                    "ceiling fans or switch1_* for power switches. Each device "
+                    "requires name, id, ip, key, and version. Use fan2_* or "
+                    "switch2_* for additional devices. Restart the plugin after "
+                    "saving changes. See Documentation for instructions on "
                     "obtaining the Tuya Device ID and Local Key."
                 )
 
@@ -513,7 +513,7 @@ def poll_handler(poll_type):
 
 
 def stop_handler():
-    LOGGER.info("Tuya Fan plugin stopping")
+    LOGGER.info("Smart Life / Tuya plugin stopping")
     polyglot.stop()
 
 
