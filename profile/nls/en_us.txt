@@ -43,3 +43,25 @@ ONOFFSTATE-1 = On
 
 ND-tuyafan-ICON=GenericCtl
 ND-tuyafanctrl-ICON=GenericCtl
+
+ND-tuyapowerswitch-NAME = Tuya Power Switch
+
+ST-tuyapowerswitch-ST-NAME = Switch
+ST-tuyapowerswitch-GV1-NAME = Voltage
+ST-tuyapowerswitch-GV2-NAME = Current
+ST-tuyapowerswitch-GV3-NAME = Power
+ST-tuyapowerswitch-GV4-NAME = Energy
+ST-tuyapowerswitch-GV5-NAME = Fault
+ST-tuyapowerswitch-GV6-NAME = Online
+
+CMD-tuyapowerswitch-DON-NAME = On
+CMD-tuyapowerswitch-DOF-NAME = Off
+CMD-tuyapowerswitch-QUERY-NAME = Query
+
+FAULTSTATE-0 = Normal
+FAULTSTATE-1 = Fault
+
+ONLINESTATE-0 = Offline
+ONLINESTATE-1 = Online
+
+ND-tuyapowerswitch-ICON=GenericCtl

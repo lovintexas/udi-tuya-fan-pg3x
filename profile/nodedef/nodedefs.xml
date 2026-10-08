@@ -58,4 +58,26 @@
     </cmds>
   </nodeDef>
 
+
+  <nodeDef id="tuyapowerswitch" nls="tuyapowerswitch">
+    <sts>
+      <st id="ST"  editor="onoffstate"/>
+      <st id="GV1" editor="voltage"/>
+      <st id="GV2" editor="current"/>
+      <st id="GV3" editor="power"/>
+      <st id="GV4" editor="energy"/>
+      <st id="GV5" editor="faultstate"/>
+      <st id="GV6" editor="onlinestate"/>
+    </sts>
+
+    <cmds>
+      <sends/>
+      <accepts>
+        <cmd id="DON"/>
+        <cmd id="DOF"/>
+        <cmd id="QUERY"/>
+      </accepts>
+    </cmds>
+  </nodeDef>
+
 </nodeDefs>

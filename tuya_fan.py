@@ -163,6 +163,100 @@ class TuyaFan(udi_interface.Node):
     }
 
 
+class TuyaPowerSwitch(udi_interface.Node):
+
+    id = "tuyapowerswitch"
+
+    drivers = [
+        {"driver": "ST",  "value": 0, "uom": 25},
+        {"driver": "GV1", "value": 0, "uom": 72},
+        {"driver": "GV2", "value": 0, "uom": 1},
+        {"driver": "GV3", "value": 0, "uom": 73},
+        {"driver": "GV4", "value": 0, "uom": 33},
+        {"driver": "GV5", "value": 0, "uom": 25},
+        {"driver": "GV6", "value": 0, "uom": 25},
+    ]
+
+    def __init__(self, polyglot, primary, address, name,
+                 device_id, ip, key, version="3.5"):
+        super().__init__(polyglot, primary, address, name)
+
+        self.device_id = device_id
+        self.ip = ip
+        self.key = key
+        self.version = float(version)
+
+        self.device = tinytuya.Device(
+            self.device_id,
+            self.ip,
+            self.key
+        )
+        self.device.set_version(self.version)
+        self.device.set_socketPersistent(True)
+
+    def query(self, command=None):
+        try:
+            result = self.device.status()
+
+            if "dps" not in result:
+                LOGGER.error(f"{self.name}: bad status response: {result}")
+                return False
+
+            dps = result["dps"]
+
+            if "1" in dps:
+                self.setDriver("ST", 1 if dps["1"] else 0)
+
+            if "20" in dps:
+                self.setDriver("GV1", float(dps["20"]) / 10.0)
+
+            if "18" in dps:
+                self.setDriver("GV2", float(dps["18"]) / 1000.0)
+
+            if "19" in dps:
+                self.setDriver("GV3", float(dps["19"]) / 10.0)
+
+            if "17" in dps:
+                self.setDriver("GV4", float(dps["17"]) / 1000.0)
+
+            if "26" in dps:
+                self.setDriver("GV5", 0 if int(dps["26"]) == 0 else 1)
+
+            if "66" in dps:
+                self.setDriver("GV6", 1 if dps["66"] == "online" else 0)
+
+            LOGGER.debug(f"{self.name}: DPS {dps}")
+            return True
+
+        except Exception as ex:
+            LOGGER.error(f"{self.name}: query failed: {ex}")
+            return False
+
+    def _set(self, value):
+        try:
+            result = self.device.set_value(1, value)
+            LOGGER.debug(f"{self.name}: set relay={value}: {result}")
+
+            # Update the relay immediately from the successful command.
+            # The normal poll will refresh all metering values later.
+            self.setDriver("ST", 1 if value else 0)
+
+        except Exception as ex:
+            LOGGER.error(f"{self.name}: command failed: {ex}")
+
+    def switch_on(self, command):
+        self._set(True)
+
+    def switch_off(self, command):
+        self._set(False)
+
+    commands = {
+        "DON": switch_on,
+        "DOF": switch_off,
+        "QUERY": query,
+    }
+
+
 class Controller(udi_interface.Node):
 
     id = "tuyafanctrl"
@@ -181,6 +275,7 @@ class Controller(udi_interface.Node):
 
         self.poly = polyglot
         self.fans = []
+        self.switches = []
         self.params = {}
 
     def configure(self, params):
@@ -235,9 +330,50 @@ class Controller(udi_interface.Node):
                         "version": version or "3.4",
                     })
 
-            if not fan_configs:
+            switch_configs = []
+
+            for num in range(1, 17):
+                prefix = f"switch{num}_"
+
+                name = self.params.get(prefix + "name")
+                device_id = self.params.get(prefix + "id")
+                ip = self.params.get(prefix + "ip")
+                key = self.params.get(prefix + "key")
+                version = self.params.get(prefix + "version", "3.5")
+
+                # Trim ordinary text fields. Do not modify the Tuya local key.
+                if isinstance(name, str):
+                    name = name.strip()
+                if isinstance(device_id, str):
+                    device_id = device_id.strip()
+                if isinstance(ip, str):
+                    ip = ip.strip()
+                if isinstance(version, str):
+                    version = version.strip()
+
+                values = (name, device_id, ip, key)
+
+                if any(values) and not all(values):
+                    LOGGER.warning(
+                        "Incomplete configuration for switch%d; "
+                        "name, id, ip and key are required",
+                        num
+                    )
+                    continue
+
+                if all(values):
+                    switch_configs.append({
+                        "name": name,
+                        "address": f"switch{num}",
+                        "id": device_id,
+                        "ip": ip,
+                        "key": key,
+                        "version": version or "3.5",
+                    })
+
+            if not fan_configs and not switch_configs:
                 LOGGER.warning(
-                    "No complete Tuya fan configuration found in Custom Parameters"
+                    "No complete Tuya device configuration found in Custom Parameters"
                 )
 
                 self.poly.Notices["setup"] = (
@@ -290,6 +426,40 @@ class Controller(udi_interface.Node):
                         config["name"]
                     )
 
+            for config in switch_configs:
+                try:
+                    switch = TuyaPowerSwitch(
+                        self.poly,
+                        "controller",
+                        config["address"],
+                        config["name"],
+                        config["id"],
+                        config["ip"],
+                        config["key"],
+                        config["version"],
+                    )
+
+                    self.poly.addNode(switch)
+                    self.switches.append(switch)
+
+                    connected = switch.query()
+
+                    LOGGER.info(
+                        "%s initialized successfully",
+                        config["name"]
+                    )
+
+                    if connected:
+                        self.setDriver("ST", 1)
+
+                    time.sleep(1)
+
+                except Exception:
+                    LOGGER.exception(
+                        "Failed to initialize %s",
+                        config["name"]
+                    )
+
         except Exception as ex:
             LOGGER.error(f"Controller start failed: {ex}")
             self.setDriver("ST", 0)
@@ -300,6 +470,12 @@ class Controller(udi_interface.Node):
                 fan.query()
             except Exception:
                 LOGGER.exception("Failed to query %s", fan.name)
+
+        for switch in self.switches:
+            try:
+                switch.query()
+            except Exception:
+                LOGGER.exception("Failed to query %s", switch.name)
 
     commands = {
         "QUERY": query,
@@ -345,7 +521,7 @@ if __name__ == "__main__":
     try:
         polyglot = udi_interface.Interface([])
 
-        polyglot.start("1.1.3")
+        polyglot.start("1.2.0")
 
         polyglot.subscribe(
             polyglot.CUSTOMPARAMS,

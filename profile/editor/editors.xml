@@ -26,4 +26,29 @@
   <editor id="fantimer">
     <range uom="25" subset="0-4" nls="FANTIMER"/>
   </editor>
+
+  <editor id="voltage">
+    <range uom="72" min="0" max="300" step="0.1" prec="1"/>
+  </editor>
+
+  <editor id="current">
+    <range uom="1" min="0" max="100" step="0.001" prec="3"/>
+  </editor>
+
+  <editor id="power">
+    <range uom="73" min="0" max="30000" step="0.1" prec="1"/>
+  </editor>
+
+  <editor id="energy">
+    <range uom="33" min="0" max="1000000" step="0.001" prec="3"/>
+  </editor>
+
+  <editor id="faultstate">
+    <range uom="25" subset="0-1" nls="FAULTSTATE"/>
+  </editor>
+
+  <editor id="onlinestate">
+    <range uom="25" subset="0-1" nls="ONLINESTATE"/>
+  </editor>
+
 </editors>
