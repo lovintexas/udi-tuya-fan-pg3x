@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import time
+import threading
 import tinytuya
 import udi_interface
 
@@ -192,7 +193,23 @@ class TuyaPowerSwitch(udi_interface.Node):
             self.key
         )
         self.device.set_version(self.version)
-        self.device.set_socketPersistent(True)
+        # Do not use persistent sockets for switches. Some Tuya 3.5
+        # devices silently expire idle persistent connections.
+
+        self._poll_timer = None
+        self._start_meter_poll()
+
+    def _start_meter_poll(self):
+        """Poll changing meter values independently of the PG3x short poll."""
+        self._poll_timer = threading.Timer(30.0, self._meter_poll)
+        self._poll_timer.daemon = True
+        self._poll_timer.start()
+
+    def _meter_poll(self):
+        try:
+            self.query()
+        finally:
+            self._start_meter_poll()
 
     def query(self, command=None):
         try:
@@ -237,9 +254,10 @@ class TuyaPowerSwitch(udi_interface.Node):
             result = self.device.set_value(1, value)
             LOGGER.debug(f"{self.name}: set relay={value}: {result}")
 
-            # Update the relay immediately from the successful command.
-            # The normal poll will refresh all metering values later.
-            self.setDriver("ST", 1 if value else 0)
+            # Confirm the actual relay state rather than assuming the
+            # requested command succeeded. Metering values are refreshed
+            # independently by the 30-second meter poll.
+            self.query()
 
         except Exception as ex:
             LOGGER.error(f"{self.name}: command failed: {ex}")
