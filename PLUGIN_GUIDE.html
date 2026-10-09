@@ -88,33 +88,150 @@ footer{padding:0 22px 35px;color:var(--muted);font-size:13px}@media(max-width:65
 <tr><td>22</td><td>Stop timer</td><td><code>off</code>, <code>1hour</code>, <code>2hour</code>, <code>4hour</code>, <code>8hour</code></td></tr></table>
 </section>
 
-<section class="card"><h2>Obtaining Tuya Device Information</h2>
-<p>The Device ID and Local Key can be obtained using the TinyTuya setup wizard. Tuya cloud access is needed for this initial setup, but not for normal plugin operation.</p>
+<section class="card"><h2>Smart Life / Tuya Setup</h2>
+<p class="lead">Before the plugin can control a fan locally, you must obtain several pieces of information about the Tuya device: its <strong>Device ID</strong>, <strong>Local Key</strong>, <strong>local IP address</strong>, and <strong>Tuya protocol version</strong>. The easiest method is to first add the fan to Smart Life or Tuya Smart, create a Tuya developer project, and then run the TinyTuya setup wizard on the eisy.</p>
 
-<h3>1. Pair the Fan</h3>
-<p>Pair the fan with a Tuya-compatible mobile application such as Smart Life or Tuya Smart and verify that it operates correctly.</p>
-
-<h3>2. Create a Tuya Developer Project</h3>
-<p>Log into the Tuya IoT Platform at <code>https://iot.tuya.com/</code> and create a Smart Home cloud project using the data center corresponding to your mobile-app account.</p>
-<p>From the project Overview page obtain the <strong>Access ID / Client ID</strong> and <strong>Access Secret / Client Secret</strong>.</p>
-
-<h3>3. Link the Mobile App Account</h3>
+<h3>1. Add the Fan to Smart Life or Tuya Smart</h3>
 <ol>
-<li>Open the project's Devices section.</li>
-<li>Select <strong>Link Tuya App Account</strong>.</li>
-<li>Select <strong>Add App Account</strong>.</li>
-<li>Scan the displayed QR code using Smart Life or Tuya Smart.</li>
-<li>Confirm the account link.</li>
+<li>Install <strong>Smart Life</strong> or <strong>Tuya Smart</strong> on your phone.</li>
+<li>Pair the fan/controller with the app in the normal manner.</li>
+<li>Verify that the fan can be controlled successfully from the app before continuing.</li>
+</ol>
+<div class="callout">The Smart Life and Tuya Smart apps use the Tuya platform. The plugin does not control the fan through the mobile app; the app is used during initial setup so the device can be associated with your Tuya account.</div>
+
+<h3>2. Create a Tuya IoT Developer Project</h3>
+<p>Using a web browser, go to <a href="https://iot.tuya.com/" target="_blank" rel="noopener">Tuya IoT Platform</a> and create or sign into a Tuya IoT developer account.</p>
+<ol>
+<li>Create a new <strong>Cloud</strong> project for Smart Home devices.</li>
+<li>Select the data center/region corresponding to the Smart Life or Tuya Smart account used to pair the fan.</li>
+<li>Open the project Overview page.</li>
+<li>Locate the project's <strong>Access ID / Client ID</strong> and <strong>Access Secret / Client Secret</strong>. These will be used by the TinyTuya wizard.</li>
 </ol>
 
-<h3>4. Run TinyTuya on eisy</h3>
-<p>SSH into eisy and run:</p>
+<h3>3. Link Your Smart Life / Tuya Smart Account</h3>
+<ol>
+<li>In the Tuya IoT project, open the <strong>Devices</strong> section.</li>
+<li>Select <strong>Link Tuya App Account</strong>.</li>
+<li>Select <strong>Add App Account</strong>.</li>
+<li>A QR code will be displayed.</li>
+<li>Open Smart Life or Tuya Smart on your phone and use its QR-code scanner to scan the code.</li>
+<li>Confirm the account link.</li>
+<li>Verify that the fan appears in the Tuya IoT project device list.</li>
+</ol>
+
+<h3>4. Connect to the eisy Using SSH</h3>
+<p>SSH provides a command-line connection to the eisy. No additional SSH software is normally required on current versions of Windows.</p>
+
+<h4>Find the eisy IP Address</h4>
+<p>Find the eisy in your router's client/device list and note its local IP address. An address will typically look something like:</p>
+<pre><code>192.168.1.50</code></pre>
+<p>Your address will probably be different. Use the actual IP address assigned to your eisy.</p>
+
+<h4>Open a Terminal in Windows</h4>
+<ol>
+<li>Right-click the Windows <strong>Start</strong> button.</li>
+<li>Select <strong>Terminal</strong>. Windows PowerShell or Command Prompt may also be used.</li>
+<li>At the prompt, enter <code>ssh admin@</code> followed by the eisy IP address.</li>
+</ol>
+<p>For example:</p>
+<pre><code>ssh admin@192.168.1.50</code></pre>
+
+<h4>First SSH Connection</h4>
+<p>The first time you connect to an eisy, SSH may display a message similar to:</p>
+<pre><code>The authenticity of host '192.168.1.50' can't be established.
+Are you sure you want to continue connecting (yes/no/[fingerprint])?</code></pre>
+<p>Type:</p>
+<pre><code>yes</code></pre>
+
+<h4>Log In</h4>
+<p>The default eisy SSH login is:</p>
+<table>
+<tr><th>Username</th><td><code>admin</code></td></tr>
+<tr><th>Password</th><td><code>admin</code></td></tr>
+</table>
+<p>If the password has previously been changed, use the current password instead.</p>
+
+<div class="callout"><strong>Important:</strong> when typing an SSH password, nothing appears on the screen—not even dots or asterisks. Type the password normally and press Enter.</div>
+
+<p>After a successful login, you should see a command prompt similar to:</p>
+<pre><code>[admin@eisy ~]$</code></pre>
+<p>You are now operating at the eisy command line.</p>
+
+<h3>5. Install TinyTuya and Run the Wizard</h3>
+<p>At the eisy SSH prompt, first make sure TinyTuya is installed:</p>
+<pre><code>python3 -m pip install --user --upgrade tinytuya</code></pre>
+
+<p>After the installation completes, run the TinyTuya setup wizard:</p>
 <pre><code>cd /home/admin
 python3 -m tinytuya wizard</code></pre>
-<p>Supply the Tuya project API Key, API Secret, region, and requested device information. TinyTuya creates <code>/home/admin/devices.json</code> containing the Device IDs and Local Keys.</p>
 
-<h3>5. Configure PG3x</h3>
-<p>Copy the appropriate Device ID, IP address, Local Key, and protocol version into the plugin Custom Parameters, save the parameters, and restart the plugin.</p>
+<p>The TinyTuya wizard will ask for information from the Tuya IoT project, including the API/Access ID, API/Access Secret, Device ID, and region. If TinyTuya has been configured previously, it may display the saved settings and ask:</p>
+
+<pre><code>Use existing credentials (Y/n):</code></pre>
+
+<p>Press <strong>Enter</strong> to accept the existing credentials, or answer <code>n</code> if new Tuya project credentials need to be entered.</p>
+
+<p>The wizard will then ask whether to download DP name mappings. Answer <code>y</code>. DP (Data Point) mappings provide descriptive information about the functions exposed by Tuya devices.</p>
+
+<pre><code>Download DP name mappings? (Y/n): y</code></pre>
+
+<p>When asked whether to poll local devices, answer <code>y</code>:</p>
+
+<pre><code>Poll local devices? (Y/n): y</code></pre>
+
+<p>TinyTuya will scan the local network for Tuya devices and attempt to communicate with them directly. A successful scan will look similar to:</p>
+
+<pre><code>Scanning local network for Tuya devices...
+    2 local devices discovered
+
+Polling local devices...
+    [Patio Fan East] 192.168.1.50 - [On] - DPS: {...}
+    [Patio Fan West] 192.168.1.51 - [On] - DPS: {...}
+
+&gt;&gt; Saving device snapshot data to snapshot.json
+&gt;&gt; Saving IP addresses to devices.json
+
+Done.</code></pre>
+
+<p>The names and IP addresses shown above are only examples. Your devices and addresses will be different.</p>
+
+<p>When successful, TinyTuya creates or updates:</p>
+<pre><code>/home/admin/devices.json</code></pre>
+
+<p>The <code>devices.json</code> file contains the Tuya device information needed to configure the plugin, including Device IDs, Local Keys, and discovered local IP addresses.</p>
+
+<h3>6. Identify the Fan Information</h3>
+<p>For each fan you intend to configure, identify:</p>
+<table>
+<tr><th>Value</th><th>Description</th></tr>
+<tr><td><strong>Device ID</strong></td><td>The unique Tuya identifier for the fan/controller.</td></tr>
+<tr><td><strong>Local Key</strong></td><td>The key used to authenticate local LAN communication.</td></tr>
+<tr><td><strong>IP Address</strong></td><td>The fan controller's current LAN address.</td></tr>
+<tr><td><strong>Protocol Version</strong></td><td>The Tuya local protocol version. The FC86B5-5D controllers tested with this plugin use <code>3.4</code>. Other controllers may use a different version.</td></tr>
+</table>
+
+<h3>7. Enter the Information in PG3x</h3>
+<p>Open the Tuya Fan plugin in PG3x and enter the information under <strong>Custom Configuration Parameters</strong>.</p>
+<p>For the first fan:</p>
+<table>
+<tr><th>Parameter</th><th>Value</th></tr>
+<tr><td><code>fan1_name</code></td><td>A friendly name, such as <code>Patio Fan East</code></td></tr>
+<tr><td><code>fan1_id</code></td><td>Tuya Device ID</td></tr>
+<tr><td><code>fan1_ip</code></td><td>Local IP address</td></tr>
+<tr><td><code>fan1_key</code></td><td>Tuya Local Key</td></tr>
+<tr><td><code>fan1_version</code></td><td>Protocol version, typically <code>3.4</code> for tested hardware</td></tr>
+</table>
+<p>Additional fans use <code>fan2_*</code>, <code>fan3_*</code>, and so forth.</p>
+
+<h3>8. Save and Restart the Plugin</h3>
+<ol>
+<li>Save the Custom Configuration Parameters.</li>
+<li>Restart the Tuya Fan plugin.</li>
+<li>Open IoX and verify that the fan node appears.</li>
+<li>Test Fan On, Fan Off, and Fan Speed.</li>
+</ol>
+
+<div class="callout ok"><strong>Normal operation is local:</strong> once setup is complete, the plugin communicates directly from the eisy to the fan over your LAN. The Tuya cloud and Smart Life/Tuya Smart app are not in the normal control path.</div>
 </section>
 
 <section class="card"><h2>Local Operation</h2>
