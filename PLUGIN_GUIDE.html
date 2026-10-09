@@ -1,5 +1,5 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Tuya Fan — PG3x Plugin Guide</title>
+<title>Smart Life / Tuya — PG3x Plugin Guide</title>
 <style>
 :root{--navy:#10243e;--blue:#2563eb;--sky:#eaf2ff;--ink:#182230;--muted:#64748b;--line:#dbe3ee;--green:#0f766e;--bg:#f4f7fb}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 system-ui,-apple-system,"Segoe UI",Arial,sans-serif}
@@ -15,77 +15,25 @@ ul,ol{margin:8px 0 8px 21px;padding:0}li{margin:5px 0}.small{color:var(--muted);
 footer{padding:0 22px 35px;color:var(--muted);font-size:13px}@media(max-width:650px){h1{font-size:32px}.card{padding:20px}}@media print{body{background:white}.card{box-shadow:none;break-inside:avoid}main{margin-top:0}}
 </style></head><body>
 
-<header><div class="wrap"><div class="eyebrow">Universal Devices • PG3x Plugin</div><h1>Tuya Fan</h1>
-<div class="subtitle">Local LAN control of compatible Tuya ceiling fan controllers from Universal Devices eisy / PG3x.</div>
-<div class="badges"><span class="badge">Local Tuya Control</span><span class="badge">TinyTuya</span><span class="badge">IoX / eisy</span><span class="badge">PG3x</span></div></div></header>
+<header><div class="wrap"><div class="eyebrow">Universal Devices • PG3x Plugin</div><h1>Smart Life / Tuya</h1>
+<div class="subtitle">Local LAN control of compatible Smart Life / Tuya devices from Universal Devices eisy / PG3x.</div>
+<div class="badges"><span class="badge">Smart Life / Tuya</span><span class="badge">Local LAN Control</span><span class="badge">TinyTuya</span><span class="badge">IoX / eisy</span><span class="badge">PG3x</span></div></div></header>
 
 <main>
 
 <section class="card"><h2>Overview</h2>
-<p class="lead">Tuya Fan presents compatible Tuya ceiling fan controllers as native IoX nodes. Normal operation is performed directly over the local LAN using TinyTuya; Tuya cloud access is not required after the Device ID and Local Key have been obtained.</p>
+<p class="lead">This PG3x plugin integrates compatible Smart Life / Tuya devices with Universal Devices eisy and IoX. Devices are controlled directly over the local network using TinyTuya, allowing normal operation without routing commands through the Tuya cloud.</p>
+
 <div class="grid">
-<div class="feature"><strong>Fan Control</strong>Fan On/Off and six fan speeds.</div>
-<div class="feature"><strong>Operating Modes</strong>Normal, Sleep, and Natural modes.</div>
-<div class="feature"><strong>Direction</strong>Forward and Reverse fan direction.</div>
-<div class="feature"><strong>Light Control</strong>Light On/Off and brightness from 0–100%.</div>
-<div class="feature"><strong>Stop Timer</strong>Off, 1 Hour, 2 Hours, 4 Hours, or 8 Hours.</div>
-<div class="feature"><strong>Multiple Fans</strong>Configure up to 16 independent fan controllers.</div>
-</div></section>
+<div class="feature"><strong>Ceiling Fans</strong>Fan On/Off, six speeds, operating modes, direction, light control, brightness, and stop timer.</div>
+<div class="feature"><strong>Smart Switches</strong>Local On/Off control of compatible Smart Life / Tuya switches.</div>
+<div class="feature"><strong>Energy Monitoring</strong>Supported switches can report voltage, current, power, and accumulated energy.</div>
+<div class="feature"><strong>Local Control</strong>Normal IoX commands travel directly from the eisy to the Tuya device over the LAN.</div>
+<div class="feature"><strong>IoX Integration</strong>Devices appear as native IoX nodes and can be used in programs and scenes.</div>
+<div class="feature"><strong>Multiple Devices</strong>Multiple compatible Tuya fans and switches can be configured in the same plugin.</div>
+</div>
 
-<section class="card"><h2>Configuration</h2>
-<p>Each fan is configured using PG3x Custom Parameters. The parameter number corresponds to the fan number.</p>
-<table><tr><th>Parameter</th><th>Purpose</th></tr>
-<tr><td><code>fan1_name</code></td><td>Display name shown in IoX.</td></tr>
-<tr><td><code>fan1_id</code></td><td>Tuya Device ID.</td></tr>
-<tr><td><code>fan1_ip</code></td><td>Local IP address of the fan controller.</td></tr>
-<tr><td><code>fan1_key</code></td><td>Tuya Local Key.</td></tr>
-<tr><td><code>fan1_version</code></td><td>Tuya protocol version. Tested controllers use <code>3.4</code>.</td></tr></table>
-<p>For additional fans use <code>fan2_*</code>, <code>fan3_*</code>, and so on through <code>fan16_*</code>.</p>
-<div class="callout"><strong>Recommended:</strong> assign each fan a DHCP reservation so its local IP address does not change.</div>
-<p>After changing Custom Parameters, save the changes and restart the plugin.</p></section>
-
-<section class="card"><h2>IoX Nodes &amp; Functions</h2>
-<table><tr><th>Function</th><th>Status / Range</th><th>Command</th></tr>
-<tr><td><strong>Fan Power</strong></td><td>On / Off</td><td>Fan On, Fan Off</td></tr>
-<tr><td><strong>Fan Speed</strong></td><td>1–6</td><td>Set Fan Speed</td></tr>
-<tr><td><strong>Fan Mode</strong></td><td>Normal / Sleep / Natural</td><td>Set Mode</td></tr>
-<tr><td><strong>Direction</strong></td><td>Forward / Reverse</td><td>Set Direction</td></tr>
-<tr><td><strong>Light</strong></td><td>On / Off</td><td>Light On, Light Off</td></tr>
-<tr><td><strong>Brightness</strong></td><td>0–100%</td><td>Set Brightness</td></tr>
-<tr><td><strong>Stop Timer</strong></td><td>Off / 1 / 2 / 4 / 8 hours</td><td>Set Timer</td></tr>
-</table>
-
-<div class="callout ok"><strong>Fan Speed behavior:</strong> setting a fan speed automatically turns the fan on before applying the requested speed. This allows an IoX scene to turn on a fan and select its speed using a single responder command.</div>
-</section>
-
-<section class="card"><h2>Using IoX Scenes</h2>
-<p>IoX scenes can use the fan node as a responder. Because a responder normally selects one command for the node, the Fan Speed command automatically includes Fan On behavior.</p>
-<p>For example, four keypad buttons can provide simple preset control:</p>
-<table><tr><th>Scene</th><th>Fan Responder Command</th></tr>
-<tr><td>High</td><td>Fan Speed 6</td></tr>
-<tr><td>Medium</td><td>Fan Speed 4</td></tr>
-<tr><td>Low</td><td>Fan Speed 2</td></tr>
-<tr><td>Off</td><td>Fan Off</td></tr></table>
-<p>A speed command therefore works whether the fan is already running or currently off.</p>
-</section>
-
-<section class="card"><h2>Tested Hardware</h2>
-<table><tr><th>Item</th><th>Tested Configuration</th></tr>
-<tr><td>Controller model</td><td>FC86B5-5D</td></tr>
-<tr><td>Manufacturer</td><td>Shenzhen Funpower General Technology Co., Ltd.</td></tr>
-<tr><td>Tuya protocol</td><td>3.4</td></tr></table>
-<p>Other Tuya ceiling fan controllers may work if they use the same DPS mapping.</p>
-</section>
-
-<section class="card"><h2>DPS Mapping</h2>
-<table><tr><th>DPS</th><th>Function</th><th>Expected Values</th></tr>
-<tr><td>1</td><td>Fan power</td><td>Boolean</td></tr>
-<tr><td>2</td><td>Fan mode</td><td><code>normal</code>, <code>sleep</code>, <code>nature</code></td></tr>
-<tr><td>3</td><td>Fan speed</td><td>1–6</td></tr>
-<tr><td>8</td><td>Direction</td><td><code>forward</code>, <code>reverse</code></td></tr>
-<tr><td>15</td><td>Light power</td><td>Boolean</td></tr>
-<tr><td>16</td><td>Light brightness</td><td>0–100</td></tr>
-<tr><td>22</td><td>Stop timer</td><td><code>off</code>, <code>1hour</code>, <code>2hour</code>, <code>4hour</code>, <code>8hour</code></td></tr></table>
+<div class="callout ok"><strong>Smart Life / Tuya:</strong> devices are initially paired and associated with a Smart Life or Tuya account. After the Device ID and Local Key are obtained, normal plugin operation is local.</div>
 </section>
 
 <section class="card"><h2>Smart Life / Tuya Setup</h2>
@@ -234,6 +182,107 @@ Done.</code></pre>
 <div class="callout ok"><strong>Normal operation is local:</strong> once setup is complete, the plugin communicates directly from the eisy to the fan over your LAN. The Tuya cloud and Smart Life/Tuya Smart app are not in the normal control path.</div>
 </section>
 
+<section class="card"><h2>Configuration</h2>
+<p>Each fan is configured using PG3x Custom Parameters. The parameter number corresponds to the fan number.</p>
+<table><tr><th>Parameter</th><th>Purpose</th></tr>
+<tr><td><code>fan1_name</code></td><td>Display name shown in IoX.</td></tr>
+<tr><td><code>fan1_id</code></td><td>Tuya Device ID.</td></tr>
+<tr><td><code>fan1_ip</code></td><td>Local IP address of the fan controller.</td></tr>
+<tr><td><code>fan1_key</code></td><td>Tuya Local Key.</td></tr>
+<tr><td><code>fan1_version</code></td><td>Tuya protocol version. Tested controllers use <code>3.4</code>.</td></tr></table>
+<p>For additional fans use <code>fan2_*</code>, <code>fan3_*</code>, and so on through <code>fan16_*</code>.</p>
+<div class="callout"><strong>Recommended:</strong> assign each fan a DHCP reservation so its local IP address does not change.</div>
+<p>After changing Custom Parameters, save the changes and restart the plugin.</p></section>
+
+<section class="card"><h2>Smart Life / Tuya Power Switches</h2>
+<p class="lead">In addition to ceiling fans, the plugin supports compatible Smart Life / Tuya power switches. Supported switches appear as native IoX nodes and can provide local On/Off control along with electrical measurements when those values are exposed by the device.</p>
+
+<h3>Switch Configuration</h3>
+<p>Power switches are configured using PG3x Custom Parameters in the same manner as ceiling fans. For the first switch use:</p>
+
+<table>
+<tr><th>Parameter</th><th>Purpose</th></tr>
+<tr><td><code>switch1_name</code></td><td>Display name shown in IoX.</td></tr>
+<tr><td><code>switch1_id</code></td><td>Tuya Device ID.</td></tr>
+<tr><td><code>switch1_ip</code></td><td>Local IP address of the switch.</td></tr>
+<tr><td><code>switch1_key</code></td><td>Tuya Local Key.</td></tr>
+<tr><td><code>switch1_version</code></td><td>Tuya local protocol version. The default for switches is <code>3.5</code>.</td></tr>
+</table>
+
+<p>Additional switches use <code>switch2_*</code>, <code>switch3_*</code>, and so forth through <code>switch16_*</code>.</p>
+
+<div class="callout"><strong>Required values:</strong> name, Device ID, IP address, and Local Key must all be supplied for each configured switch. If the protocol version is omitted, the plugin defaults to <code>3.5</code>.</div>
+
+<h3>IoX Switch Node</h3>
+<p>A configured power switch provides standard IoX <strong>On</strong> and <strong>Off</strong> commands. After an On or Off command is sent, the plugin queries the device to confirm its actual relay state rather than simply assuming that the command succeeded.</p>
+
+<h3>Energy Monitoring</h3>
+<p>When supported by the Tuya switch, the node also reports electrical measurements supplied by the device:</p>
+
+<table>
+<tr><th>Measurement</th><th>Tuya DPS</th><th>Reported Value</th></tr>
+<tr><td>Voltage</td><td>20</td><td>Volts</td></tr>
+<tr><td>Current</td><td>18</td><td>Amps</td></tr>
+<tr><td>Power</td><td>19</td><td>Watts</td></tr>
+<tr><td>Accumulated Energy</td><td>17</td><td>kWh</td></tr>
+<tr><td>Additional Status</td><td>26</td><td>Off / On</td></tr>
+<tr><td>Online Status</td><td>66</td><td>Offline / Online</td></tr>
+</table>
+
+<p>Metering values are refreshed approximately every <strong>30 seconds</strong>, independently of the normal PG3x polling interval. This allows changing power consumption to be reflected in IoX without requiring frequent polling of every device by PG3x.</p>
+
+<div class="callout ok"><strong>Local operation:</strong> switch On/Off commands and metering queries are sent directly between the eisy and the switch over the local network.</div>
+
+<h3>Switch Communication</h3>
+<p>The switch implementation opens a new local Tuya connection when communicating with the device rather than maintaining an idle persistent socket. This improves compatibility with tested Tuya 3.5 switches that may silently expire an idle persistent connection.</p>
+</section>
+
+<section class="card"><h2>Ceiling Fan Nodes &amp; Functions</h2>
+<table><tr><th>Function</th><th>Status / Range</th><th>Command</th></tr>
+<tr><td><strong>Fan Power</strong></td><td>On / Off</td><td>Fan On, Fan Off</td></tr>
+<tr><td><strong>Fan Speed</strong></td><td>1–6</td><td>Set Fan Speed</td></tr>
+<tr><td><strong>Fan Mode</strong></td><td>Normal / Sleep / Natural</td><td>Set Mode</td></tr>
+<tr><td><strong>Direction</strong></td><td>Forward / Reverse</td><td>Set Direction</td></tr>
+<tr><td><strong>Light</strong></td><td>On / Off</td><td>Light On, Light Off</td></tr>
+<tr><td><strong>Brightness</strong></td><td>0–100%</td><td>Set Brightness</td></tr>
+<tr><td><strong>Stop Timer</strong></td><td>Off / 1 / 2 / 4 / 8 hours</td><td>Set Timer</td></tr>
+</table>
+
+<div class="callout ok"><strong>Fan Speed behavior:</strong> setting a fan speed automatically turns the fan on before applying the requested speed. This allows an IoX scene to turn on a fan and select its speed using a single responder command.</div>
+</section>
+
+<section class="card"><h2>Using Ceiling Fans in IoX Scenes</h2>
+<p>IoX scenes can use the fan node as a responder. Because a responder normally selects one command for the node, the Fan Speed command automatically includes Fan On behavior.</p>
+<p>For example, four keypad buttons can provide simple preset control:</p>
+<table><tr><th>Scene</th><th>Fan Responder Command</th></tr>
+<tr><td>High</td><td>Fan Speed 6</td></tr>
+<tr><td>Medium</td><td>Fan Speed 4</td></tr>
+<tr><td>Low</td><td>Fan Speed 2</td></tr>
+<tr><td>Off</td><td>Fan Off</td></tr></table>
+<p>A speed command therefore works whether the fan is already running or currently off.</p>
+</section>
+
+<section class="card"><h2>Tested Hardware</h2>
+<table><tr><th>Item</th><th>Tested Configuration</th></tr>
+<tr><td>Controller model</td><td>FC86B5-5D</td></tr>
+<tr><td>Manufacturer</td><td>Shenzhen Funpower General Technology Co., Ltd.</td></tr>
+<tr><td>Tuya protocol</td><td>3.4</td></tr></table>
+<p>Other Tuya ceiling fan controllers may work if they use the same DPS mapping.</p>
+</section>
+
+<section class="card"><h2>DPS Mapping</h2>
+<table><tr><th>DPS</th><th>Function</th><th>Expected Values</th></tr>
+<tr><td>1</td><td>Fan power</td><td>Boolean</td></tr>
+<tr><td>2</td><td>Fan mode</td><td><code>normal</code>, <code>sleep</code>, <code>nature</code></td></tr>
+<tr><td>3</td><td>Fan speed</td><td>1–6</td></tr>
+<tr><td>8</td><td>Direction</td><td><code>forward</code>, <code>reverse</code></td></tr>
+<tr><td>15</td><td>Light power</td><td>Boolean</td></tr>
+<tr><td>16</td><td>Light brightness</td><td>0–100</td></tr>
+<tr><td>22</td><td>Stop timer</td><td><code>off</code>, <code>1hour</code>, <code>2hour</code>, <code>4hour</code>, <code>8hour</code></td></tr></table>
+</section>
+
+
+
 <section class="card"><h2>Local Operation</h2>
 <div class="flow"><span class="step">IoX Command</span><span class="arrow">→</span><span class="step">Tuya Fan Plugin</span><span class="arrow">→</span><span class="step">TinyTuya</span><span class="arrow">→</span><span class="step">Local Fan Controller</span></div>
 <p>Once configured, normal fan control and status polling occur directly between eisy and the Tuya device over the LAN.</p>
@@ -258,8 +307,8 @@ Done.</code></pre>
 </section>
 
 <section class="card"><h2>Version</h2>
-<p><strong>Current version: 1.1.3</strong></p>
-<p class="small">Version 1.1.3 adds automatic Fan On behavior when setting fan speed, allowing a single IoX scene responder command to both start the fan and select its speed.</p>
+<p><strong>Current version: 1.2.0</strong></p>
+<p class="small">Version 1.2.0 expands the plugin beyond ceiling fans with support for compatible Smart Life / Tuya power switches, including local On/Off control and energy-monitoring values where supported by the device. Ceiling fan control remains fully supported.</p>
 </section>
 
 </main>
