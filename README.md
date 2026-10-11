@@ -171,6 +171,21 @@ The plugin converts these values for display in IoX as kWh, A, W, and V.
 
 Other Smart Life / Tuya power-monitoring switches may work if they use the same DPS mapping.
 
+### Smart Life simple On/Off outlet
+
+Tested with a WP3/5 Smart Life Wi-Fi outlet using Tuya protocol 3.5.
+
+Outlet DPS mapping:
+
+| DPS | Function |
+|---|---|
+| 1 | Relay power |
+
+The plugin provides local On/Off control and automatically refreshes the
+outlet state every 30 seconds.
+
+Other Smart Life / Tuya outlets may work if they use DPS 1 for relay power.
+
 ## Requirements
 
 - Universal Devices eisy
