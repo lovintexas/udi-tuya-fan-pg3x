@@ -275,6 +275,93 @@ class TuyaPowerSwitch(udi_interface.Node):
     }
 
 
+class TuyaOutlet(udi_interface.Node):
+
+    id = "tuyaoutlet"
+
+    drivers = [
+        {"driver": "ST", "value": 0, "uom": 25},
+    ]
+
+    def __init__(self, polyglot, primary, address, name,
+                 device_id, ip, key, version="3.5"):
+        super().__init__(polyglot, primary, address, name)
+
+        self.device_id = device_id
+        self.ip = ip
+        self.key = key
+        self.version = float(version)
+
+        self.device = tinytuya.Device(
+            self.device_id,
+            self.ip,
+            self.key
+        )
+        self.device.set_version(self.version)
+
+        # Do not use persistent sockets. Some Tuya 3.5 devices
+        # silently expire idle persistent connections.
+
+        self._poll_timer = None
+        self._start_outlet_poll()
+
+    def _start_outlet_poll(self):
+        """Poll outlet state independently of the PG3x short poll."""
+        self._poll_timer = threading.Timer(30.0, self._outlet_poll)
+        self._poll_timer.daemon = True
+        self._poll_timer.start()
+
+    def _outlet_poll(self):
+        try:
+            self.query()
+        finally:
+            self._start_outlet_poll()
+
+    def query(self, command=None):
+        try:
+            result = self.device.status()
+
+            if "dps" not in result:
+                LOGGER.error(f"{self.name}: bad status response: {result}")
+                return False
+
+            dps = result["dps"]
+
+            if "1" in dps:
+                self.setDriver("ST", 1 if dps["1"] else 0)
+
+            LOGGER.debug(f"{self.name}: DPS {dps}")
+            return True
+
+        except Exception as ex:
+            LOGGER.error(f"{self.name}: query failed: {ex}")
+            return False
+
+    def _set(self, value):
+        try:
+            result = self.device.set_value(1, value)
+            LOGGER.debug(f"{self.name}: set relay={value}: {result}")
+
+            # Confirm the actual relay state rather than assuming
+            # the requested command succeeded.
+            self.query()
+
+        except Exception as ex:
+            LOGGER.error(f"{self.name}: command failed: {ex}")
+
+    def switch_on(self, command):
+        self._set(True)
+
+    def switch_off(self, command):
+        self._set(False)
+
+    commands = {
+        "DON": switch_on,
+        "DOF": switch_off,
+        "QUERY": query,
+    }
+
+
 class Controller(udi_interface.Node):
 
     id = "tuyafanctrl"
@@ -294,6 +381,7 @@ class Controller(udi_interface.Node):
         self.poly = polyglot
         self.fans = []
         self.switches = []
+        self.outlets = []
         self.params = {}
 
     def configure(self, params):
@@ -389,16 +477,58 @@ class Controller(udi_interface.Node):
                         "version": version or "3.5",
                     })
 
-            if not fan_configs and not switch_configs:
+            outlet_configs = []
+
+            for num in range(1, 17):
+                prefix = f"outlet{num}_"
+
+                name = self.params.get(prefix + "name")
+                device_id = self.params.get(prefix + "id")
+                ip = self.params.get(prefix + "ip")
+                key = self.params.get(prefix + "key")
+                version = self.params.get(prefix + "version", "3.5")
+
+                # Trim ordinary text fields. Do not modify the Tuya local key.
+                if isinstance(name, str):
+                    name = name.strip()
+                if isinstance(device_id, str):
+                    device_id = device_id.strip()
+                if isinstance(ip, str):
+                    ip = ip.strip()
+                if isinstance(version, str):
+                    version = version.strip()
+
+                values = (name, device_id, ip, key)
+
+                if any(values) and not all(values):
+                    LOGGER.warning(
+                        "Incomplete configuration for outlet%d; "
+                        "name, id, ip and key are required",
+                        num
+                    )
+                    continue
+
+                if all(values):
+                    outlet_configs.append({
+                        "name": name,
+                        "address": f"outlet{num}",
+                        "id": device_id,
+                        "ip": ip,
+                        "key": key,
+                        "version": version or "3.5",
+                    })
+
+            if not fan_configs and not switch_configs and not outlet_configs:
                 LOGGER.warning(
                     "No complete Tuya device configuration found in Custom Parameters"
                 )
 
                 self.poly.Notices["setup"] = (
                     "Smart Life / Tuya setup required. Configure fan1_* for "
-                    "ceiling fans or switch1_* for power switches. Each device "
-                    "requires name, id, ip, key, and version. Use fan2_* or "
-                    "switch2_* for additional devices. Restart the plugin after "
+                    "ceiling fans, switch1_* for power-monitoring switches, or "
+                    "outlet1_* for simple On/Off outlets. Each device requires "
+                    "name, id, ip, key, and version. Use fan2_*, switch2_*, or "
+                    "outlet2_* for additional devices. Restart the plugin after "
                     "saving changes. See Documentation for instructions on "
                     "obtaining the Tuya Device ID and Local Key."
                 )
@@ -478,6 +608,40 @@ class Controller(udi_interface.Node):
                         config["name"]
                     )
 
+            for config in outlet_configs:
+                try:
+                    outlet = TuyaOutlet(
+                        self.poly,
+                        "controller",
+                        config["address"],
+                        config["name"],
+                        config["id"],
+                        config["ip"],
+                        config["key"],
+                        config["version"],
+                    )
+
+                    self.poly.addNode(outlet)
+                    self.outlets.append(outlet)
+
+                    connected = outlet.query()
+
+                    LOGGER.info(
+                        "%s initialized successfully",
+                        config["name"]
+                    )
+
+                    if connected:
+                        self.setDriver("ST", 1)
+
+                    time.sleep(1)
+
+                except Exception:
+                    LOGGER.exception(
+                        "Failed to initialize %s",
+                        config["name"]
+                    )
+
         except Exception as ex:
             LOGGER.error(f"Controller start failed: {ex}")
             self.setDriver("ST", 0)
@@ -494,6 +658,12 @@ class Controller(udi_interface.Node):
                 switch.query()
             except Exception:
                 LOGGER.exception("Failed to query %s", switch.name)
+
+        for outlet in self.outlets:
+            try:
+                outlet.query()
+            except Exception:
+                LOGGER.exception("Failed to query %s", outlet.name)
 
     commands = {
         "QUERY": query,
@@ -539,7 +709,7 @@ if __name__ == "__main__":
     try:
         polyglot = udi_interface.Interface([])
 
-        polyglot.start("1.2.0")
+        polyglot.start("1.2.1")
 
         polyglot.subscribe(
             polyglot.CUSTOMPARAMS,

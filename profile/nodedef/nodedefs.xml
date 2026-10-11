@@ -80,4 +80,20 @@
     </cmds>
   </nodeDef>
 
+
+  <nodeDef id="tuyaoutlet" nls="tuyaoutlet">
+    <sts>
+      <st id="ST" editor="onoffstate"/>
+    </sts>
+
+    <cmds>
+      <sends/>
+      <accepts>
+        <cmd id="DON"/>
+        <cmd id="DOF"/>
+        <cmd id="QUERY"/>
+      </accepts>
+    </cmds>
+  </nodeDef>
+
 </nodeDefs>

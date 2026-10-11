@@ -65,3 +65,13 @@ ONLINESTATE-0 = Offline
 ONLINESTATE-1 = Online
 
 ND-tuyapowerswitch-ICON=GenericCtl
+
+ND-tuyaoutlet-NAME = Smart Life / Tuya Outlet
+
+ST-tuyaoutlet-ST-NAME = Outlet
+
+CMD-tuyaoutlet-DON-NAME = On
+CMD-tuyaoutlet-DOF-NAME = Off
+CMD-tuyaoutlet-QUERY-NAME = Query
+
+ND-tuyaoutlet-ICON=GenericCtl

@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.1
+- Added support for simple Smart Life / Tuya On/Off outlets using the `outlet1_*` through `outlet16_*` Custom Parameters.
+- Added independent 30-second state polling for simple outlets.
+- Added independent 30-second metering and state polling for power-monitoring switches.
+- Power switches and outlets now confirm the actual relay state after On/Off commands.
+- Disabled persistent TinyTuya sockets for protocol 3.5 switches and outlets to avoid stale idle connections; persistent sockets remain enabled for ceiling fans.
+
 ## 1.2.0
 - Renamed the user-facing plugin to Smart Life / Tuya Control to make compatibility clearer for devices sold for use with the Smart Life app.
 - Added support for Smart Life / Tuya power-monitoring switches using the `switch1_*` through `switch16_*` Custom Parameters.

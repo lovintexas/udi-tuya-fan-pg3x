@@ -37,7 +37,14 @@ Supported switch controls and measurements:
 - Fault status
 - Online status
 
-The plugin currently supports up to 16 fans and 16 power switches.
+### Simple On/Off outlets
+
+Supported outlet controls:
+
+- Outlet On / Off
+- Automatic state refresh every 30 seconds
+
+The plugin currently supports up to 16 fans, 16 power-monitoring switches, and 16 simple On/Off outlets.
 
 ## Configuration
 
@@ -70,6 +77,20 @@ For switch 1:
 For additional switches use `switch2_*`, `switch3_*`, etc., through `switch16_*`.
 
 The tested Smart Life power-monitoring switch uses Tuya protocol version `3.5`.
+
+### Simple On/Off outlets
+
+For outlet 1:
+
+- `outlet1_name`
+- `outlet1_id`
+- `outlet1_ip`
+- `outlet1_key`
+- `outlet1_version`
+
+For additional outlets use `outlet2_*`, `outlet3_*`, etc., through `outlet16_*`.
+
+The tested Smart Life On/Off outlet uses Tuya protocol version `3.5`.
 
 ### Parameter meanings
 
@@ -168,13 +189,14 @@ Configuration is stored in PG3x Custom Parameters rather than in this repository
 
 ## Version
 
-Current version: 1.2.0
+Current version: 1.2.1
 
 ## Obtaining Your Smart Life / Tuya Device Information
 
 Each device requires five Custom Parameters. Use the `fan1_*` prefix for
-a supported ceiling fan or the `switch1_*` prefix for a supported
-power-monitoring switch.
+a supported ceiling fan, the `switch1_*` prefix for a supported
+power-monitoring switch, or the `outlet1_*` prefix for a supported
+simple On/Off outlet.
 
 The Device ID and Local Key can be obtained using the TinyTuya setup
 wizard. The Tuya cloud is only needed to obtain this information.
@@ -304,14 +326,24 @@ For a power-monitoring switch use:
 
 For additional switches use `switch2_*`, `switch3_*`, etc.
 
+For a simple On/Off outlet use:
+
+    outlet1_name
+    outlet1_id
+    outlet1_ip
+    outlet1_key
+    outlet1_version
+
+For additional outlets use `outlet2_*`, `outlet3_*`, etc.
+
 After entering or changing the Custom Parameters, save the changes and
 restart the plugin.
 
 ### Important Notes
 
-The `fan*_key` and `switch*_key` values are security credentials. Keep
-your Tuya Local Keys private and do not post them in logs, screenshots,
-support requests, or public repositories.
+The `fan*_key`, `switch*_key`, and `outlet*_key` values are security
+credentials. Keep your Tuya Local Keys private and do not post them in
+logs, screenshots, support requests, or public repositories.
 
 It is recommended that each device be assigned a DHCP reservation so
 its local IP address does not change.
