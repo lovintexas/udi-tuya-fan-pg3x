@@ -37,21 +37,21 @@ footer{padding:0 22px 35px;color:var(--muted);font-size:13px}@media(max-width:65
 </section>
 
 <section class="card"><h2>Smart Life / Tuya Setup</h2>
-<p class="lead">Before the plugin can control a fan locally, you must obtain several pieces of information about the Tuya device: its <strong>Device ID</strong>, <strong>Local Key</strong>, <strong>local IP address</strong>, and <strong>Tuya protocol version</strong>. The easiest method is to first add the fan to Smart Life or Tuya Smart, create a Tuya developer project, and then run the TinyTuya setup wizard on the eisy.</p>
+<p class="lead">Before the plugin can control a supported device locally, you must obtain several pieces of information about the Tuya device: its <strong>Device ID</strong>, <strong>Local Key</strong>, <strong>local IP address</strong>, and <strong>Tuya protocol version</strong>. The easiest method is to first add the device to Smart Life or Tuya Smart, create a Tuya developer project, and then run the TinyTuya setup wizard on the eisy.</p>
 
-<h3>1. Add the Fan to Smart Life or Tuya Smart</h3>
+<h3>1. Add the Device to Smart Life or Tuya Smart</h3>
 <ol>
 <li>Install <strong>Smart Life</strong> or <strong>Tuya Smart</strong> on your phone.</li>
-<li>Pair the fan/controller with the app in the normal manner.</li>
-<li>Verify that the fan can be controlled successfully from the app before continuing.</li>
+<li>Pair the device with the app in the normal manner.</li>
+<li>Verify that the device can be controlled successfully from the app before continuing.</li>
 </ol>
-<div class="callout">The Smart Life and Tuya Smart apps use the Tuya platform. The plugin does not control the fan through the mobile app; the app is used during initial setup so the device can be associated with your Tuya account.</div>
+<div class="callout">The Smart Life and Tuya Smart apps use the Tuya platform. The plugin does not control the device through the mobile app; the app is used during initial setup so the device can be associated with your Tuya account.</div>
 
 <h3>2. Create a Tuya IoT Developer Project</h3>
 <p>Using a web browser, go to <a href="https://iot.tuya.com/" target="_blank" rel="noopener">Tuya IoT Platform</a> and create or sign into a Tuya IoT developer account.</p>
 <ol>
 <li>Create a new <strong>Cloud</strong> project for Smart Home devices.</li>
-<li>Select the data center/region corresponding to the Smart Life or Tuya Smart account used to pair the fan.</li>
+<li>Select the data center/region corresponding to the Smart Life or Tuya Smart account used to pair the device.</li>
 <li>Open the project Overview page.</li>
 <li>Locate the project's <strong>Access ID / Client ID</strong> and <strong>Access Secret / Client Secret</strong>. These will be used by the TinyTuya wizard.</li>
 </ol>
@@ -64,7 +64,7 @@ footer{padding:0 22px 35px;color:var(--muted);font-size:13px}@media(max-width:65
 <li>A QR code will be displayed.</li>
 <li>Open Smart Life or Tuya Smart on your phone and use its QR-code scanner to scan the code.</li>
 <li>Confirm the account link.</li>
-<li>Verify that the fan appears in the Tuya IoT project device list.</li>
+<li>Verify that the device appears in the Tuya IoT project device list.</li>
 </ol>
 
 <h3>4. Connect to the eisy Using SSH</h3>
@@ -148,18 +148,18 @@ Done.</code></pre>
 
 <p>The <code>devices.json</code> file contains the Tuya device information needed to configure the plugin, including Device IDs, Local Keys, and discovered local IP addresses.</p>
 
-<h3>6. Identify the Fan Information</h3>
-<p>For each fan you intend to configure, identify:</p>
+<h3>6. Identify the Device Information</h3>
+<p>For each device you intend to configure, identify:</p>
 <table>
 <tr><th>Value</th><th>Description</th></tr>
-<tr><td><strong>Device ID</strong></td><td>The unique Tuya identifier for the fan/controller.</td></tr>
+<tr><td><strong>Device ID</strong></td><td>The unique Tuya identifier for the device.</td></tr>
 <tr><td><strong>Local Key</strong></td><td>The key used to authenticate local LAN communication.</td></tr>
-<tr><td><strong>IP Address</strong></td><td>The fan controller's current LAN address.</td></tr>
+<tr><td><strong>IP Address</strong></td><td>The device's current LAN address.</td></tr>
 <tr><td><strong>Protocol Version</strong></td><td>The Tuya local protocol version. The FC86B5-5D controllers tested with this plugin use <code>3.4</code>. Other controllers may use a different version.</td></tr>
 </table>
 
 <h3>7. Enter the Information in PG3x</h3>
-<p>Open the Tuya Fan plugin in PG3x and enter the information under <strong>Custom Configuration Parameters</strong>.</p>
+<p>Open the Smart Life / Tuya plugin in PG3x and enter the information under <strong>Custom Configuration Parameters</strong>.</p>
 <p>For the first fan:</p>
 <table>
 <tr><th>Parameter</th><th>Value</th></tr>
@@ -174,9 +174,9 @@ Done.</code></pre>
 <h3>8. Save and Restart the Plugin</h3>
 <ol>
 <li>Save the Custom Configuration Parameters.</li>
-<li>Restart the Tuya Fan plugin.</li>
-<li>Open IoX and verify that the fan node appears.</li>
-<li>Test Fan On, Fan Off, and Fan Speed.</li>
+<li>Restart the Smart Life / Tuya plugin.</li>
+<li>Open IoX and verify that the configured device node appears.</li>
+<li>Test the appropriate controls for the configured device.</li>
 </ol>
 
 <div class="callout ok"><strong>Normal operation is local:</strong> once setup is complete, the plugin communicates directly from the eisy to the fan over your LAN. The Tuya cloud and Smart Life/Tuya Smart app are not in the normal control path.</div>
@@ -235,6 +235,37 @@ Done.</code></pre>
 
 <h3>Switch Communication</h3>
 <p>The switch implementation opens a new local Tuya connection when communicating with the device rather than maintaining an idle persistent socket. This improves compatibility with tested Tuya 3.5 switches that may silently expire an idle persistent connection.</p>
+</section>
+
+<section class="card"><h2>Smart Life / Tuya Simple Outlets</h2>
+<p class="lead">The plugin also supports compatible Smart Life / Tuya simple On/Off outlets that use DPS 1 for relay power.</p>
+
+<h3>Outlet Configuration</h3>
+<p>Simple outlets are configured using PG3x Custom Parameters. For the first outlet use:</p>
+
+<table>
+<tr><th>Parameter</th><th>Purpose</th></tr>
+<tr><td><code>outlet1_name</code></td><td>Display name shown in IoX.</td></tr>
+<tr><td><code>outlet1_id</code></td><td>Tuya Device ID.</td></tr>
+<tr><td><code>outlet1_ip</code></td><td>Local IP address of the outlet.</td></tr>
+<tr><td><code>outlet1_key</code></td><td>Tuya Local Key.</td></tr>
+<tr><td><code>outlet1_version</code></td><td>Tuya local protocol version. The default for outlets is <code>3.5</code>.</td></tr>
+</table>
+
+<p>Additional outlets use <code>outlet2_*</code>, <code>outlet3_*</code>, and so forth through <code>outlet16_*</code>.</p>
+
+<div class="callout"><strong>Required values:</strong> name, Device ID, IP address, and Local Key must all be supplied for each configured outlet. If the protocol version is omitted, the plugin defaults to <code>3.5</code>.</div>
+
+<h3>IoX Outlet Node</h3>
+<p>A configured outlet provides standard IoX <strong>On</strong> and <strong>Off</strong> commands. After a command is sent, the plugin queries the outlet to confirm its actual relay state.</p>
+
+<h3>Outlet State Updates</h3>
+<p>The outlet state is refreshed approximately every <strong>30 seconds</strong>, independently of the normal PG3x polling interval. This allows changes made with the physical button or another control method to be reflected in IoX.</p>
+
+<h3>Outlet Communication</h3>
+<p>Like the power-monitoring switch implementation, simple outlets do not maintain an idle persistent Tuya socket. A new local connection is used when communicating with the device, avoiding stale idle connections observed with tested Tuya 3.5 devices.</p>
+
+<div class="callout ok"><strong>Tested hardware:</strong> a WP3/5 Smart Life Wi-Fi outlet using Tuya protocol 3.5 and DPS 1 for relay power has been tested successfully.</div>
 </section>
 
 <section class="card"><h2>Ceiling Fan Nodes &amp; Functions</h2>
