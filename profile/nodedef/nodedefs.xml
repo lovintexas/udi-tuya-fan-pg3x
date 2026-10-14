@@ -96,4 +96,30 @@
     </cmds>
   </nodeDef>
 
+  <nodeDef id="tuyadehumidifier" nls="tuyadehumidifier">
+    <sts>
+      <st id="ST" editor="onoffstate"/>
+      <st id="GV1" editor="dhhumidity"/>
+      <st id="GV2" editor="dhactualhumidity"/>
+      <st id="GV3" editor="dhtemperature"/>
+      <st id="GV4" editor="dhspeed"/>
+      <st id="GV5" editor="onoffstate"/>
+      <st id="GV6" editor="onoffstate"/>
+      <st id="GV7" editor="dhtimer"/>
+      <st id="GV8" editor="dhfault"/>
+      <st id="GV9" editor="dhfilter"/>
+      <st id="GV10" editor="dhtempunit"/>
+    </sts>
+    <cmds><sends/><accepts>
+      <cmd id="DON"/><cmd id="DOF"/>
+      <cmd id="SET_HUMIDITY"><p id="" editor="dhhumidity"/></cmd>
+      <cmd id="SET_DH_SPEED"><p id="" editor="dhspeed"/></cmd>
+      <cmd id="SET_ANION"><p id="" editor="onoffstate"/></cmd>
+      <cmd id="SET_LOCK"><p id="" editor="onoffstate"/></cmd>
+      <cmd id="SET_DH_TIMER"><p id="" editor="dhtimer"/></cmd>
+      <cmd id="SET_TEMP_UNIT"><p id="" editor="dhtempunit"/></cmd>
+      <cmd id="RESET_FILTER"/><cmd id="RESET_RUNTIME"/>
+      <cmd id="QUERY"/>
+    </accepts></cmds>
+  </nodeDef>
 </nodeDefs>

@@ -337,9 +337,59 @@ Done.</code></pre>
 </ul>
 </section>
 
+
+<section class="card"><h2>Smart Life / Tuya Dehumidifiers</h2>
+<p class="lead">The plugin supports compatible Smart Life / Tuya dehumidifiers using local LAN communication. This implementation is based on a supplied Tuya DPS specification for protocol 3.5.</p>
+
+<h3>Dehumidifier Configuration</h3>
+<p>Configure the first dehumidifier using these PG3x Custom Parameters:</p>
+<table>
+<tr><th>Parameter</th><th>Description</th></tr>
+<tr><td><code>dehumidifier1_name</code></td><td>Display name shown in IoX.</td></tr>
+<tr><td><code>dehumidifier1_id</code></td><td>Tuya Device ID.</td></tr>
+<tr><td><code>dehumidifier1_ip</code></td><td>Local IP address.</td></tr>
+<tr><td><code>dehumidifier1_key</code></td><td>Tuya Local Key.</td></tr>
+<tr><td><code>dehumidifier1_version</code></td><td>Protocol version; defaults to <code>3.5</code>.</td></tr>
+</table>
+<p>Additional dehumidifiers use <code>dehumidifier2_*</code> through <code>dehumidifier16_*</code>. Name, Device ID, IP address, and Local Key are required.</p>
+
+<h3>Supported Controls and Status</h3>
+<ul>
+<li>Power On / Off</li>
+<li>Target humidity from 30% to 80% in 5% increments</li>
+<li>Low / High fan speed</li>
+<li>Indoor humidity and temperature reporting</li>
+<li>Anion generator and child lock</li>
+<li>Countdown timer: Cancel, 1, 2, or 3 hours</li>
+<li>Fault bitmap and remaining filter life</li>
+<li>Celsius / Fahrenheit display selection</li>
+<li>Filter-life and runtime reset commands</li>
+</ul>
+
+<h3>Tuya DPS Mapping</h3>
+<table>
+<tr><th>DPS</th><th>Function</th></tr>
+<tr><td>1</td><td>Power</td></tr>
+<tr><td>2</td><td>Target humidity</td></tr>
+<tr><td>4</td><td>Fan speed</td></tr>
+<tr><td>6</td><td>Indoor humidity</td></tr>
+<tr><td>7</td><td>Indoor temperature (Celsius)</td></tr>
+<tr><td>10</td><td>Anion generator</td></tr>
+<tr><td>16</td><td>Child lock</td></tr>
+<tr><td>17</td><td>Countdown timer</td></tr>
+<tr><td>19</td><td>Fault bitmap</td></tr>
+<tr><td>20</td><td>Filter reset</td></tr>
+<tr><td>23</td><td>Filter life</td></tr>
+<tr><td>24</td><td>Temperature display unit</td></tr>
+<tr><td>28</td><td>Runtime reset</td></tr>
+</table>
+
+<div class="callout"><strong>Testing status:</strong> The DPS mappings and commands have passed simulated tests, but communication with an actual dehumidifier has not yet been verified. Other dehumidifier models may use different DPS mappings.</div>
+</section>
+
 <section class="card"><h2>Version</h2>
-<p><strong>Current version: 1.2.1</strong></p>
-<p class="small">Version 1.2.1 adds support for simple Smart Life / Tuya On/Off outlets and improves reliability of protocol 3.5 switches and outlets by avoiding stale persistent connections. Power-monitoring switches now refresh metering values every 30 seconds. Ceiling fan control remains fully supported.</p>
+<p><strong>Current version: 1.3.0</strong></p>
+<p class="small">Version 1.3.0 adds dehumidifier support with humidity, fan speed, timer, filter, and auxiliary controls. Dehumidifier support has passed simulated tests and awaits physical hardware verification. Existing ceiling fan, power-monitoring switch, and simple outlet support remains available.</p>
 </section>
 
 </main>

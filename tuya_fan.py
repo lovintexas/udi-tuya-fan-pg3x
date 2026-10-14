@@ -362,6 +362,108 @@ class TuyaOutlet(udi_interface.Node):
     }
 
 
+class TuyaDehumidifier(udi_interface.Node):
+    id = "tuyadehumidifier"
+    drivers = [
+        {"driver": "ST", "value": 0, "uom": 25},
+        {"driver": "GV1", "value": 50, "uom": 51},
+        {"driver": "GV2", "value": 0, "uom": 51},
+        {"driver": "GV3", "value": 0, "uom": 4},
+        {"driver": "GV4", "value": 0, "uom": 25},
+        {"driver": "GV5", "value": 0, "uom": 25},
+        {"driver": "GV6", "value": 0, "uom": 25},
+        {"driver": "GV7", "value": 0, "uom": 25},
+        {"driver": "GV8", "value": 0, "uom": 56},
+        {"driver": "GV9", "value": 0, "uom": 51},
+        {"driver": "GV10", "value": 0, "uom": 25},
+    ]
+    SPEEDS = {"low": 0, "high": 1}
+    TIMERS = {"cancel": 0, "1h": 1, "2h": 2, "3h": 3}
+    UNITS = {"c": 0, "f": 1}
+
+    def __init__(self, polyglot, primary, address, name, device_id, ip, key, version="3.5"):
+        super().__init__(polyglot, primary, address, name)
+        self.device_id, self.ip, self.key = device_id, ip, key
+        self.version = float(version)
+        self.device = tinytuya.Device(device_id, ip, key)
+        self.device.set_version(self.version)
+        # Nonpersistent sockets are safer with devices that expire idle sessions.
+
+    def query(self, command=None):
+        try:
+            result = self.device.status()
+            if not isinstance(result, dict) or not isinstance(result.get("dps"), dict):
+                LOGGER.error(f"{self.name}: bad status response: {result}")
+                return False
+            d = result["dps"]
+            mapping = (
+                ("1", "ST", lambda v: int(bool(v))),
+                ("2", "GV1", int),
+                ("6", "GV2", int),
+                ("7", "GV3", int),
+                ("4", "GV4", lambda v: self.SPEEDS[v]),
+                ("10", "GV5", lambda v: int(bool(v))),
+                ("16", "GV6", lambda v: int(bool(v))),
+                ("17", "GV7", lambda v: self.TIMERS[v]),
+                ("19", "GV8", int),
+                ("23", "GV9", int),
+                ("24", "GV10", lambda v: self.UNITS[v]),
+            )
+            for dp, driver, converter in mapping:
+                if dp in d:
+                    try:
+                        self.setDriver(driver, converter(d[dp]))
+                    except (ValueError, TypeError, KeyError) as ex:
+                        LOGGER.warning(f"{self.name}: invalid DPS {dp} value {d[dp]!r}: {ex}")
+            LOGGER.debug(f"{self.name}: DPS {d}")
+            return True
+        except Exception as ex:
+            LOGGER.error(f"{self.name}: query failed: {ex}")
+            return False
+
+    def _set(self, dp, value):
+        try:
+            result = self.device.set_value(dp, value)
+            LOGGER.debug(f"{self.name}: set DPS {dp}={value}: {result}")
+            if isinstance(result, dict) and result.get("Error"):
+                LOGGER.error(f"{self.name}: device rejected DPS {dp}: {result}")
+                return
+            self.query()
+        except Exception as ex:
+            LOGGER.error(f"{self.name}: command failed: {ex}")
+
+    @staticmethod
+    def _value(command):
+        return int(float(command["value"]))
+
+    def power_on(self, command): self._set(1, True)
+    def power_off(self, command): self._set(1, False)
+
+    def set_humidity(self, command):
+        value = self._value(command)
+        if 30 <= value <= 80 and value % 5 == 0:
+            self._set(2, value)
+        else:
+            LOGGER.error(f"{self.name}: invalid target humidity {value}")
+
+    def set_speed(self, command): self._set(4, {0: "low", 1: "high"}[self._value(command)])
+    def set_anion(self, command): self._set(10, bool(self._value(command)))
+    def set_lock(self, command): self._set(16, bool(self._value(command)))
+    def set_timer(self, command): self._set(17, {v: k for k, v in self.TIMERS.items()}[self._value(command)])
+    def set_unit(self, command): self._set(24, {v: k for k, v in self.UNITS.items()}[self._value(command)])
+    def reset_filter(self, command): self._set(20, True)
+    def reset_runtime(self, command): self._set(28, True)
+
+    commands = {
+        "DON": power_on, "DOF": power_off,
+        "SET_HUMIDITY": set_humidity, "SET_DH_SPEED": set_speed,
+        "SET_ANION": set_anion, "SET_LOCK": set_lock,
+        "SET_DH_TIMER": set_timer, "SET_TEMP_UNIT": set_unit,
+        "RESET_FILTER": reset_filter, "RESET_RUNTIME": reset_runtime,
+        "QUERY": query,
+    }
+
+
 class Controller(udi_interface.Node):
 
     id = "tuyafanctrl"
@@ -382,6 +484,7 @@ class Controller(udi_interface.Node):
         self.fans = []
         self.switches = []
         self.outlets = []
+        self.dehumidifiers = []
         self.params = {}
 
     def configure(self, params):
@@ -518,7 +621,30 @@ class Controller(udi_interface.Node):
                         "version": version or "3.5",
                     })
 
-            if not fan_configs and not switch_configs and not outlet_configs:
+            dehumidifier_configs = []
+            for num in range(1, 17):
+                prefix = f"dehumidifier{num}_"
+                name = self.params.get(prefix + "name")
+                device_id = self.params.get(prefix + "id")
+                ip = self.params.get(prefix + "ip")
+                key = self.params.get(prefix + "key")
+                version = self.params.get(prefix + "version", "3.5")
+                if isinstance(name, str): name = name.strip()
+                if isinstance(device_id, str): device_id = device_id.strip()
+                if isinstance(ip, str): ip = ip.strip()
+                if isinstance(version, str): version = version.strip()
+                values = (name, device_id, ip, key)
+                if any(values) and not all(values):
+                    LOGGER.warning("Incomplete configuration for dehumidifier%d", num)
+                    continue
+                if all(values):
+                    dehumidifier_configs.append({
+                        "name": name, "address": f"dehumidifier{num}",
+                        "id": device_id, "ip": ip, "key": key,
+                        "version": version or "3.5",
+                    })
+
+            if not fan_configs and not switch_configs and not outlet_configs and not dehumidifier_configs:
                 LOGGER.warning(
                     "No complete Tuya device configuration found in Custom Parameters"
                 )
@@ -526,7 +652,8 @@ class Controller(udi_interface.Node):
                 self.poly.Notices["setup"] = (
                     "Smart Life / Tuya setup required. Configure fan1_* for "
                     "ceiling fans, switch1_* for power-monitoring switches, or "
-                    "outlet1_* for simple On/Off outlets. Each device requires "
+                    "outlet1_* for simple On/Off outlets, or dehumidifier1_* "
+                    "for dehumidifiers. Each device requires "
                     "name, id, ip, key, and version. Use fan2_*, switch2_*, or "
                     "outlet2_* for additional devices. Restart the plugin after "
                     "saving changes. See Documentation for instructions on "
@@ -642,6 +769,21 @@ class Controller(udi_interface.Node):
                         config["name"]
                     )
 
+            for config in dehumidifier_configs:
+                try:
+                    node = TuyaDehumidifier(
+                        self.poly, "controller", config["address"], config["name"],
+                        config["id"], config["ip"], config["key"], config["version"]
+                    )
+                    self.poly.addNode(node)
+                    self.dehumidifiers.append(node)
+                    if node.query():
+                        self.setDriver("ST", 1)
+                    LOGGER.info("%s dehumidifier initialized", config["name"])
+                    time.sleep(1)
+                except Exception:
+                    LOGGER.exception("Failed to initialize %s", config["name"])
+
         except Exception as ex:
             LOGGER.error(f"Controller start failed: {ex}")
             self.setDriver("ST", 0)
@@ -664,6 +806,12 @@ class Controller(udi_interface.Node):
                 outlet.query()
             except Exception:
                 LOGGER.exception("Failed to query %s", outlet.name)
+
+        for node in self.dehumidifiers:
+            try:
+                node.query()
+            except Exception:
+                LOGGER.exception("Failed to query %s", node.name)
 
     commands = {
         "QUERY": query,
@@ -709,7 +857,7 @@ if __name__ == "__main__":
     try:
         polyglot = udi_interface.Interface([])
 
-        polyglot.start("1.2.1")
+        polyglot.start("1.3.0")
 
         polyglot.subscribe(
             polyglot.CUSTOMPARAMS,

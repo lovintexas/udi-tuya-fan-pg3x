@@ -37,6 +37,22 @@ Supported switch controls and measurements:
 - Fault status
 - Online status
 
+### Dehumidifiers
+
+Supports compatible Smart Life / Tuya dehumidifiers using protocol 3.5 and the documented DPS mapping.
+
+- Power On / Off
+- Target humidity: 30–80% in 5% increments
+- Fan speed: Low / High
+- Indoor humidity and temperature reporting
+- Anion generator and child lock controls
+- Countdown timer: Cancel / 1 / 2 / 3 hours
+- Filter life and fault status reporting
+- Celsius / Fahrenheit display selection
+- Filter life and runtime reset commands
+
+**Testing status:** DPS mapping and commands have passed simulated tests. Physical dehumidifier communication has not yet been verified.
+
 ### Simple On/Off outlets
 
 Supported outlet controls:
@@ -44,7 +60,7 @@ Supported outlet controls:
 - Outlet On / Off
 - Automatic state refresh every 30 seconds
 
-The plugin currently supports up to 16 fans, 16 power-monitoring switches, and 16 simple On/Off outlets.
+The plugin supports up to 16 devices of each type: ceiling fans, power-monitoring switches, simple On/Off outlets, and dehumidifiers.
 
 ## Configuration
 
@@ -91,6 +107,20 @@ For outlet 1:
 For additional outlets use `outlet2_*`, `outlet3_*`, etc., through `outlet16_*`.
 
 The tested Smart Life On/Off outlet uses Tuya protocol version `3.5`.
+
+### Dehumidifiers
+
+For dehumidifier 1:
+
+- `dehumidifier1_name`
+- `dehumidifier1_id`
+- `dehumidifier1_ip`
+- `dehumidifier1_key`
+- `dehumidifier1_version`
+
+For additional dehumidifiers use `dehumidifier2_*` through `dehumidifier16_*`.
+
+The default Tuya protocol version is `3.5`. The `name`, `id`, `ip`, and `key` parameters are required.
 
 ### Parameter meanings
 
@@ -186,6 +216,28 @@ outlet state every 30 seconds.
 
 Other Smart Life / Tuya outlets may work if they use DPS 1 for relay power.
 
+### Smart Life / Tuya dehumidifier (not yet hardware-tested)
+
+The initial implementation targets a Tuya protocol 3.5 dehumidifier with the following DPS mapping, supplied by a device owner.
+
+| DPS | Function |
+|---|---|
+| 1 | Power |
+| 2 | Target humidity |
+| 4 | Fan speed (`low`, `high`) |
+| 6 | Indoor humidity |
+| 7 | Indoor temperature (°C) |
+| 10 | Anion generator |
+| 16 | Child lock |
+| 17 | Countdown (`cancel`, `1h`, `2h`, `3h`) |
+| 19 | Fault bitmap |
+| 20 | Filter reset |
+| 23 | Filter life |
+| 24 | Temperature display unit (`c`, `f`) |
+| 28 | Runtime reset |
+
+Other dehumidifiers may use different DPS mappings. Compatibility is not guaranteed.
+
 ## Requirements
 
 - Universal Devices eisy
@@ -204,14 +256,14 @@ Configuration is stored in PG3x Custom Parameters rather than in this repository
 
 ## Version
 
-Current version: 1.2.1
+Current version: 1.3.0
 
 ## Obtaining Your Smart Life / Tuya Device Information
 
 Each device requires five Custom Parameters. Use the `fan1_*` prefix for
 a supported ceiling fan, the `switch1_*` prefix for a supported
-power-monitoring switch, or the `outlet1_*` prefix for a supported
-simple On/Off outlet.
+power-monitoring switch, the `outlet1_*` prefix for a supported simple On/Off outlet,
+or the `dehumidifier1_*` prefix for a supported dehumidifier.
 
 The Device ID and Local Key can be obtained using the TinyTuya setup
 wizard. The Tuya cloud is only needed to obtain this information.
@@ -351,12 +403,16 @@ For a simple On/Off outlet use:
 
 For additional outlets use `outlet2_*`, `outlet3_*`, etc.
 
+For a dehumidifier use `dehumidifier1_name`, `dehumidifier1_id`,
+`dehumidifier1_ip`, `dehumidifier1_key`, and `dehumidifier1_version`.
+Additional dehumidifiers use `dehumidifier2_*` through `dehumidifier16_*`.
+
 After entering or changing the Custom Parameters, save the changes and
 restart the plugin.
 
 ### Important Notes
 
-The `fan*_key`, `switch*_key`, and `outlet*_key` values are security
+The `fan*_key`, `switch*_key`, `outlet*_key`, and `dehumidifier*_key` values are security
 credentials. Keep your Tuya Local Keys private and do not post them in
 logs, screenshots, support requests, or public repositories.
 

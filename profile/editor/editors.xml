@@ -51,4 +51,12 @@
     <range uom="25" subset="0-1" nls="ONLINESTATE"/>
   </editor>
 
+  <editor id="dhhumidity"><range uom="51" min="30" max="80" step="5"/></editor>
+  <editor id="dhactualhumidity"><range uom="51" min="0" max="100" step="1"/></editor>
+  <editor id="dhtemperature"><range uom="4" min="-20" max="100" step="1"/></editor>
+  <editor id="dhspeed"><range uom="25" subset="0-1" nls="DHSPEED"/></editor>
+  <editor id="dhtimer"><range uom="25" subset="0-3" nls="DHTIMER"/></editor>
+  <editor id="dhtempunit"><range uom="25" subset="0-1" nls="DHTEMPUNIT"/></editor>
+  <editor id="dhfault"><range uom="56" min="0" max="255" step="1"/></editor>
+  <editor id="dhfilter"><range uom="51" min="0" max="100" step="1"/></editor>
 </editors>

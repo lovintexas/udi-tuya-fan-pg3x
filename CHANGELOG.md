@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.3.0
+- Added Smart Life / Tuya dehumidifier support using `dehumidifier1_*` through `dehumidifier16_*` Custom Parameters.
+- Added power control, target humidity adjustment, and low/high fan speed control.
+- Added reporting of indoor humidity, temperature, filter life, and fault status.
+- Added controls for the anion generator, child lock, countdown timer, and temperature display units.
+- Added filter-life and runtime reset commands.
+- Added independent dehumidifier polling and IoX node profiles.
+- Tested DPS mapping and commands with simulated device responses; physical dehumidifier testing is pending.
+
+
 ## 1.2.1
 - Added support for simple Smart Life / Tuya On/Off outlets using the `outlet1_*` through `outlet16_*` Custom Parameters.
 - Added independent 30-second state polling for simple outlets.
