@@ -1,5 +1,17 @@
 # Changelog
 
+
+## 1.3.1
+
+- Added eight individual dehumidifier fault indicators:
+  Tank Full, Clean Filter, E1 Error, Low Temperature,
+  High Temperature, Low Humidity, Coil Fault, and Motor Fault.
+- Decode each fault independently from DPS 19, supporting
+  multiple simultaneous faults.
+- Retained the original Fault Bitmap for diagnostics.
+- No changes to device control commands.
+- Individual fault indicators await hardware validation.
+
 ## 1.3.0
 - Added Smart Life / Tuya dehumidifier support using `dehumidifier1_*` through `dehumidifier16_*` Custom Parameters.
 - Added power control, target humidity adjustment, and low/high fan speed control.

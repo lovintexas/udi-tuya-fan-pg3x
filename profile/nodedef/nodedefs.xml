@@ -109,6 +109,14 @@
       <st id="GV8" editor="dhfault"/>
       <st id="GV9" editor="dhfilter"/>
       <st id="GV10" editor="dhtempunit"/>
+      <st id="GV11" editor="onoffstate"/>
+      <st id="GV12" editor="onoffstate"/>
+      <st id="GV13" editor="onoffstate"/>
+      <st id="GV14" editor="onoffstate"/>
+      <st id="GV15" editor="onoffstate"/>
+      <st id="GV16" editor="onoffstate"/>
+      <st id="GV17" editor="onoffstate"/>
+      <st id="GV18" editor="onoffstate"/>
     </sts>
     <cmds><sends/><accepts>
       <cmd id="DON"/><cmd id="DOF"/>

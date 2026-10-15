@@ -376,6 +376,14 @@ class TuyaDehumidifier(udi_interface.Node):
         {"driver": "GV8", "value": 0, "uom": 56},
         {"driver": "GV9", "value": 0, "uom": 51},
         {"driver": "GV10", "value": 0, "uom": 25},
+        {"driver": "GV11", "value": 0, "uom": 25},
+        {"driver": "GV12", "value": 0, "uom": 25},
+        {"driver": "GV13", "value": 0, "uom": 25},
+        {"driver": "GV14", "value": 0, "uom": 25},
+        {"driver": "GV15", "value": 0, "uom": 25},
+        {"driver": "GV16", "value": 0, "uom": 25},
+        {"driver": "GV17", "value": 0, "uom": 25},
+        {"driver": "GV18", "value": 0, "uom": 25},
     ]
     SPEEDS = {"low": 0, "high": 1}
     TIMERS = {"cancel": 0, "1h": 1, "2h": 2, "3h": 3}
@@ -415,6 +423,18 @@ class TuyaDehumidifier(udi_interface.Node):
                         self.setDriver(driver, converter(d[dp]))
                     except (ValueError, TypeError, KeyError) as ex:
                         LOGGER.warning(f"{self.name}: invalid DPS {dp} value {d[dp]!r}: {ex}")
+            if "19" in d:
+                try:
+                    bitmap = int(d["19"])
+                    for bit in range(8):
+                        self.setDriver(
+                            f"GV{11 + bit}",
+                            int(bool(bitmap & (1 << bit)))
+                        )
+                except (ValueError, TypeError) as ex:
+                    LOGGER.warning(
+                        f"{self.name}: invalid fault bitmap {d['19']!r}: {ex}"
+                    )
             LOGGER.debug(f"{self.name}: DPS {d}")
             return True
         except Exception as ex:
@@ -857,7 +877,7 @@ if __name__ == "__main__":
     try:
         polyglot = udi_interface.Interface([])
 
-        polyglot.start("1.3.0")
+        polyglot.start("1.3.1")
 
         polyglot.subscribe(
             polyglot.CUSTOMPARAMS,
