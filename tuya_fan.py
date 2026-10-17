@@ -47,6 +47,61 @@ ISY_TO_TIMER = {
 }
 
 
+# IMPORTANT: Every Tuya device must use its own background worker.
+# Socket timeouts alone did not prevent offline devices from blocking
+# commands to other devices. All network commands and polling must run
+# through the device worker, never directly on the PG3x event thread.
+# Use ordered commands for multi-function devices (fans/dehumidifiers).
+# Also configure TinyTuya socket timeout=3 and retry limit=1.
+
+class TuyaWorker:
+    """One background worker per device; latest pending command wins."""
+
+    def __init__(self, name):
+        self.name = name
+        self._condition = threading.Condition()
+        self._pending = None
+        self._ordered = []
+        self._busy = False
+        self._thread = threading.Thread(target=self._run, daemon=True)
+        self._thread.start()
+
+    def submit(self, operation):
+        with self._condition:
+            self._pending = operation
+            self._condition.notify()
+
+    def submit_ordered(self, operation):
+        with self._condition:
+            self._ordered.append(operation)
+            self._condition.notify()
+
+    def submit_poll(self, operation):
+        with self._condition:
+            if not self._busy and self._pending is None and not self._ordered:
+                self._pending = operation
+                self._condition.notify()
+
+    def _run(self):
+        while True:
+            with self._condition:
+                while self._pending is None and not self._ordered:
+                    self._condition.wait()
+                if self._ordered:
+                    operation = self._ordered.pop(0)
+                else:
+                    operation = self._pending
+                    self._pending = None
+                self._busy = True
+            try:
+                operation()
+            except Exception:
+                LOGGER.exception("%s: worker operation failed", self.name)
+            finally:
+                with self._condition:
+                    self._busy = False
+
+
 class TuyaFan(udi_interface.Node):
 
     id = "tuyafan"
@@ -75,7 +130,11 @@ class TuyaFan(udi_interface.Node):
             self.key
         )
         self.device.set_version(self.version)
+        self.device.set_socketTimeout(3)
+        self.device.set_socketRetryLimit(1)
         self.device.set_socketPersistent(True)
+        self._worker = TuyaWorker(self.name)
+        self._worker = TuyaWorker(self.name)
 
     def query(self, command=None):
         try:
@@ -103,6 +162,9 @@ class TuyaFan(udi_interface.Node):
             return False
 
     def _set(self, dps, value):
+        self._worker.submit_ordered(lambda: self._set_direct(dps, value))
+
+    def _set_direct(self, dps, value):
         try:
             result = self.device.set_value(dps, value)
             LOGGER.debug(f"{self.name}: set DPS {dps}={value}: {result}")
@@ -118,6 +180,9 @@ class TuyaFan(udi_interface.Node):
 
     def set_speed(self, command):
         value = int(float(command.get("value", 1)))
+        self._worker.submit_ordered(lambda: self._set_speed_direct(value))
+
+    def _set_speed_direct(self, value):
         try:
             result = self.device.set_multiple_values({
                 "1": True,
@@ -150,6 +215,9 @@ class TuyaFan(udi_interface.Node):
         value = int(float(command.get("value", 0)))
         self._set(22, ISY_TO_TIMER[value])
 
+    def query_command(self, command):
+        self._worker.submit_poll(self.query)
+
     commands = {
         "DON": fan_on,
         "DOF": fan_off,
@@ -160,7 +228,7 @@ class TuyaFan(udi_interface.Node):
         "LIGHT_OFF": light_off,
         "SET_BRIGHTNESS": set_brightness,
         "SET_TIMER": set_timer,
-        "QUERY": query,
+        "QUERY": query_command,
     }
 
 
@@ -193,9 +261,12 @@ class TuyaPowerSwitch(udi_interface.Node):
             self.key
         )
         self.device.set_version(self.version)
+        self.device.set_socketTimeout(3)
+        self.device.set_socketRetryLimit(1)
         # Do not use persistent sockets for switches. Some Tuya 3.5
         # devices silently expire idle persistent connections.
 
+        self._worker = TuyaWorker(self.name)
         self._poll_timer = None
         self._start_meter_poll()
 
@@ -207,7 +278,7 @@ class TuyaPowerSwitch(udi_interface.Node):
 
     def _meter_poll(self):
         try:
-            self.query()
+            self._worker.submit_poll(self.query)
         finally:
             self._start_meter_poll()
 
@@ -263,15 +334,18 @@ class TuyaPowerSwitch(udi_interface.Node):
             LOGGER.error(f"{self.name}: command failed: {ex}")
 
     def switch_on(self, command):
-        self._set(True)
+        self._worker.submit(lambda: self._set(True))
 
     def switch_off(self, command):
-        self._set(False)
+        self._worker.submit(lambda: self._set(False))
+
+    def query_command(self, command):
+        self._worker.submit_poll(self.query)
 
     commands = {
         "DON": switch_on,
         "DOF": switch_off,
-        "QUERY": query,
+        "QUERY": query_command,
     }
 
 
@@ -298,10 +372,13 @@ class TuyaOutlet(udi_interface.Node):
             self.key
         )
         self.device.set_version(self.version)
+        self.device.set_socketTimeout(3)
+        self.device.set_socketRetryLimit(1)
 
         # Do not use persistent sockets. Some Tuya 3.5 devices
         # silently expire idle persistent connections.
 
+        self._worker = TuyaWorker(self.name)
         self._poll_timer = None
         self._start_outlet_poll()
 
@@ -313,7 +390,7 @@ class TuyaOutlet(udi_interface.Node):
 
     def _outlet_poll(self):
         try:
-            self.query()
+            self._worker.submit_poll(lambda: self.query())
         finally:
             self._start_outlet_poll()
 
@@ -350,15 +427,18 @@ class TuyaOutlet(udi_interface.Node):
             LOGGER.error(f"{self.name}: command failed: {ex}")
 
     def switch_on(self, command):
-        self._set(True)
+        self._worker.submit(lambda: self._set(True))
 
     def switch_off(self, command):
-        self._set(False)
+        self._worker.submit(lambda: self._set(False))
+
+    def query_command(self, command):
+        self._worker.submit_poll(self.query)
 
     commands = {
         "DON": switch_on,
         "DOF": switch_off,
-        "QUERY": query,
+        "QUERY": query_command,
     }
 
 
@@ -395,6 +475,9 @@ class TuyaDehumidifier(udi_interface.Node):
         self.version = float(version)
         self.device = tinytuya.Device(device_id, ip, key)
         self.device.set_version(self.version)
+        self.device.set_socketTimeout(3)
+        self.device.set_socketRetryLimit(1)
+        self._worker = TuyaWorker(self.name)
         # Nonpersistent sockets are safer with devices that expire idle sessions.
 
     def query(self, command=None):
@@ -442,6 +525,12 @@ class TuyaDehumidifier(udi_interface.Node):
             return False
 
     def _set(self, dp, value):
+        self._worker.submit_ordered(lambda: self._set_direct(dp, value))
+
+    def _set_direct(self, dp, value):
+        self._worker.submit_ordered(lambda: self._set_direct(dp, value))
+
+    def _set_direct(self, dp, value):
         try:
             result = self.device.set_value(dp, value)
             LOGGER.debug(f"{self.name}: set DPS {dp}={value}: {result}")
@@ -474,13 +563,16 @@ class TuyaDehumidifier(udi_interface.Node):
     def reset_filter(self, command): self._set(20, True)
     def reset_runtime(self, command): self._set(28, True)
 
+    def query_command(self, command):
+        self._worker.submit_poll(self.query)
+
     commands = {
         "DON": power_on, "DOF": power_off,
         "SET_HUMIDITY": set_humidity, "SET_DH_SPEED": set_speed,
         "SET_ANION": set_anion, "SET_LOCK": set_lock,
         "SET_DH_TIMER": set_timer, "SET_TEMP_UNIT": set_unit,
         "RESET_FILTER": reset_filter, "RESET_RUNTIME": reset_runtime,
-        "QUERY": query,
+        "QUERY": query_command,
     }
 
 
@@ -701,15 +793,13 @@ class Controller(udi_interface.Node):
                     self.poly.addNode(fan)
                     self.fans.append(fan)
 
-                    connected = fan.query()
+                    fan._worker.submit_poll(fan.query)
 
                     LOGGER.info(
                         "%s initialized successfully",
                         config["name"]
                     )
 
-                    if connected:
-                        self.setDriver("ST", 1)
 
                     # Give PG3x/IoX time to finish registering this node
                     # before submitting the next child node.
@@ -737,15 +827,13 @@ class Controller(udi_interface.Node):
                     self.poly.addNode(switch)
                     self.switches.append(switch)
 
-                    connected = switch.query()
+                    switch._worker.submit_poll(switch.query)
 
                     LOGGER.info(
                         "%s initialized successfully",
                         config["name"]
                     )
 
-                    if connected:
-                        self.setDriver("ST", 1)
 
                     time.sleep(1)
 
@@ -771,15 +859,13 @@ class Controller(udi_interface.Node):
                     self.poly.addNode(outlet)
                     self.outlets.append(outlet)
 
-                    connected = outlet.query()
+                    outlet._worker.submit_poll(outlet.query)
 
                     LOGGER.info(
                         "%s initialized successfully",
                         config["name"]
                     )
 
-                    if connected:
-                        self.setDriver("ST", 1)
 
                     time.sleep(1)
 
@@ -797,12 +883,13 @@ class Controller(udi_interface.Node):
                     )
                     self.poly.addNode(node)
                     self.dehumidifiers.append(node)
-                    if node.query():
-                        self.setDriver("ST", 1)
+                    node._worker.submit_poll(node.query)
                     LOGGER.info("%s dehumidifier initialized", config["name"])
                     time.sleep(1)
                 except Exception:
                     LOGGER.exception("Failed to initialize %s", config["name"])
+
+            self.setDriver("ST", 1)
 
         except Exception as ex:
             LOGGER.error(f"Controller start failed: {ex}")
@@ -811,25 +898,25 @@ class Controller(udi_interface.Node):
     def query(self, command=None):
         for fan in self.fans:
             try:
-                fan.query()
+                fan._worker.submit_poll(fan.query)
             except Exception:
                 LOGGER.exception("Failed to query %s", fan.name)
 
         for switch in self.switches:
             try:
-                switch.query()
+                switch._worker.submit_poll(switch.query)
             except Exception:
                 LOGGER.exception("Failed to query %s", switch.name)
 
         for outlet in self.outlets:
             try:
-                outlet.query()
+                outlet._worker.submit_poll(outlet.query)
             except Exception:
                 LOGGER.exception("Failed to query %s", outlet.name)
 
         for node in self.dehumidifiers:
             try:
-                node.query()
+                node._worker.submit_poll(node.query)
             except Exception:
                 LOGGER.exception("Failed to query %s", node.name)
 
@@ -877,7 +964,7 @@ if __name__ == "__main__":
     try:
         polyglot = udi_interface.Interface([])
 
-        polyglot.start("1.3.1")
+        polyglot.start("1.3.2")
 
         polyglot.subscribe(
             polyglot.CUSTOMPARAMS,

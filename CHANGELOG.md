@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.3.2
+
+- Fixed offline devices blocking other Tuya devices using independent background workers.
+- Added nonblocking commands, polling, and startup queries.
+- Preserved ordered commands for fans and dehumidifiers.
+- Reduced socket timeouts and retries.
+- Tested fans and outlets, including both fans offline; other device types await testing.
+
 
 ## 1.3.1
 
