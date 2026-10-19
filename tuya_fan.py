@@ -155,6 +155,7 @@ class TuyaFan(udi_interface.Node):
             self.setDriver("GV6", TIMER_TO_ISY.get(dps.get("22"), 0))
 
             LOGGER.debug(f"{self.name}: DPS {dps}")
+            self.reportDrivers()
             return True
 
         except Exception as ex:
@@ -964,7 +965,7 @@ if __name__ == "__main__":
     try:
         polyglot = udi_interface.Interface([])
 
-        polyglot.start("1.3.2")
+        polyglot.start("1.3.3")
 
         polyglot.subscribe(
             polyglot.CUSTOMPARAMS,

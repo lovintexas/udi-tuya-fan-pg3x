@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.3.3
+
+- Fixed fan status reporting compatibility with IoX 6.1.2.
+- Explicitly republish fan node drivers after querying device status.
+- No changes to polling intervals, socket handling, or device commands.
+
 ## 1.3.2
 
 - Fixed offline devices blocking other Tuya devices using independent background workers.
