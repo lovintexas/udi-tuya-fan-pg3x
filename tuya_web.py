@@ -7,13 +7,12 @@ from pathlib import Path
 
 import tinytuya
 import uvicorn
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from pydantic import BaseModel
 
 BASE = Path(__file__).resolve().parent
-PASSWORD_FILE = BASE / "tuya_web_password.txt"
 ACCOUNTS_FILE = BASE / "tuya_web_accounts.json"
 CONFIG_FILE = BASE / "tinytuya.json"
 DEVICES_FILE = BASE / "tuya_devices.json"
@@ -125,25 +124,250 @@ def write_eisy_customparams(params):
         conn.close()
 
 
-app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
+from contextlib import asynccontextmanager
+import asyncio
+import signal
+
+
+@asynccontextmanager
+async def web_lifespan(app):
+    original_parent = os.getppid()
+
+    async def monitor_parent():
+        # A manually launched editor has no managed parent to monitor.
+        if os.environ.get("TUYA_MANAGED_WEB") != "1":
+            return
+
+        while True:
+            await asyncio.sleep(2)
+
+            if os.getppid() != original_parent:
+                os.kill(os.getpid(), signal.SIGTERM)
+                return
+
+    task = asyncio.create_task(monitor_parent())
+
+    try:
+        yield
+    finally:
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
+
+app = FastAPI(
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
+    lifespan=web_lifespan
+)
+
+from urllib.parse import urlsplit
+from fastapi.responses import JSONResponse
+
+@app.middleware("http")
+async def csrf_protection(request: Request, call_next):
+    if request.method in ("POST", "PUT", "PATCH", "DELETE"):
+        origin = request.headers.get("origin")
+        if not origin:
+            return JSONResponse(
+                {"detail": "Origin header required"}, status_code=403
+            )
+
+        try:
+            parsed = urlsplit(origin)
+            expected = request.headers.get("host", "")
+            valid = (
+                parsed.scheme == "https"
+                and parsed.netloc == expected
+                and parsed.path == ""
+                and parsed.query == ""
+                and parsed.fragment == ""
+                and parsed.username is None
+                and parsed.password is None
+            )
+        except ValueError:
+            valid = False
+
+        if not valid:
+            return JSONResponse(
+                {"detail": "Invalid request origin"}, status_code=403
+            )
+
+    response = await call_next(request)
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
 security = HTTPBasic()
 lock = threading.Lock()
 
-if not PASSWORD_FILE.exists():
-    PASSWORD_FILE.write_text(secrets.token_urlsafe(24) + "\n")
-    os.chmod(PASSWORD_FILE, 0o600)
+from fastapi import Request, Response
+from tuya_auth import read_credentials, check_password
+from tuya_sessions import (
+    create_session, validate_session,
+    revoke_session, revoke_all_sessions,
+)
+
+SESSION_COOKIE = "tuya_session"
 
 
-def authenticate(credentials: HTTPBasicCredentials = Depends(security)):
-    expected = PASSWORD_FILE.read_text().strip()
-    if not (
-        secrets.compare_digest(credentials.username, "admin")
-        and secrets.compare_digest(credentials.password, expected)
+def authenticate(request: Request):
+    token = request.cookies.get(SESSION_COOKIE)
+    # Background inventory polling must not extend the session.
+    refresh = request.headers.get("X-User-Activity") == "1"
+
+    if not validate_session(token, refresh=refresh):
+        raise HTTPException(401, "Login required")
+
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+class InitialSetupRequest(BaseModel):
+    password: str
+    confirm: str
+
+
+@app.post("/api/auth/setup")
+def setup_admin(data: InitialSetupRequest):
+    from tuya_auth import create_initial_password
+
+    if data.password != data.confirm:
+        raise HTTPException(400, "Passwords do not match")
+
+    try:
+        create_initial_password(BASE, data.password)
+    except ValueError as ex:
+        raise HTTPException(400, str(ex))
+
+    return {"ok": True}
+
+
+@app.post("/api/auth/login")
+def login(data: LoginRequest, response: Response):
+    stored = read_credentials(BASE)
+
+    if (
+        stored is None
+        or not secrets.compare_digest(data.username, "admin")
+        or not check_password(data.password, *stored)
     ):
-        raise HTTPException(
-            401, "Authentication required",
-            headers={"WWW-Authenticate": "Basic"}
+        raise HTTPException(401, "Invalid username or password")
+
+    token = create_session()
+    response.set_cookie(
+        SESSION_COOKIE,
+        token,
+        httponly=True,
+        secure=True,
+        samesite="strict",
+        path="/",
+    )
+    return {"ok": True}
+
+
+@app.post("/api/auth/logout")
+def logout(request: Request, response: Response):
+    revoke_session(request.cookies.get(SESSION_COOKIE))
+    response.delete_cookie(
+        SESSION_COOKIE,
+        path="/",
+        secure=True,
+        httponly=True,
+        samesite="strict",
+    )
+    return {"ok": True}
+
+
+@app.post("/api/auth/heartbeat", dependencies=[Depends(authenticate)])
+def auth_heartbeat(request: Request):
+    token = request.cookies.get(SESSION_COOKIE)
+    if not validate_session(token, refresh=True):
+        raise HTTPException(401, "Session expired")
+    return {"ok": True}
+
+
+class PasswordChangeRequest(BaseModel):
+    current_password: str
+    new_password: str
+    confirm_password: str
+
+
+@app.post("/api/auth/change", dependencies=[Depends(authenticate)])
+def change_admin_password(data: PasswordChangeRequest):
+    from tuya_auth import change_password
+
+    if data.new_password != data.confirm_password:
+        raise HTTPException(400, "New passwords do not match")
+
+    try:
+        change_password(
+            BASE,
+            data.current_password,
+            data.new_password,
         )
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+    revoke_all_sessions()
+    return {"ok": True}
+
+
+class PasswordRecoveryRequest(BaseModel):
+    code: str
+    new_password: str
+    confirm_password: str
+
+
+RECOVERY_INTERVAL = 5
+_recovery_last_attempt = 0.0
+_recovery_lock = threading.Lock()
+
+
+@app.post("/api/auth/recover")
+def recover_admin_password(data: PasswordRecoveryRequest):
+    global _recovery_last_attempt
+    from tuya_auth import complete_recovery
+
+    with _recovery_lock:
+        now = time.monotonic()
+        if now - _recovery_last_attempt < RECOVERY_INTERVAL:
+            raise HTTPException(
+                429, "Please wait 5 seconds before trying again"
+            )
+        _recovery_last_attempt = now
+
+    if data.new_password != data.confirm_password:
+        raise HTTPException(400, "New passwords do not match")
+
+    try:
+        complete_recovery(
+            BASE,
+            data.code,
+            data.new_password,
+        )
+    except ValueError:
+        raise HTTPException(
+            400, "Invalid or expired recovery code, or invalid password"
+        )
+
+    revoke_all_sessions()
+    return {"ok": True}
+
+
+@app.get("/api/auth/status")
+def auth_status(request: Request):
+    return {
+        "configured": read_credentials(BASE) is not None,
+        "authenticated": validate_session(
+            request.cookies.get(SESSION_COOKIE)
+        ),
+    }
 
 
 def read_accounts():
@@ -168,7 +392,7 @@ class Account(BaseModel):
     apiDeviceID: str = ""
 
 
-@app.get("/", response_class=HTMLResponse, dependencies=[Depends(authenticate)])
+@app.get("/", response_class=HTMLResponse)
 def index():
     return HTML
 
@@ -770,10 +994,86 @@ button:disabled{opacity:.55;cursor:wait}
 }
 #restartModal button{margin-top:16px}
 
+#loginScreen{max-width:400px;margin:10vh auto}
+#loginScreen section{box-shadow:0 4px 20px #0001}
+#loginScreen input{margin-bottom:14px}
+#editor{display:none}
+#logoutBtn{float:right}
 </style>
 </head>
 <body>
+<div id="setupScreen" style="display:none">
+<section style="max-width:400px;margin:10vh auto">
+<h1>SmartLife / Tuya First-Time Setup</h1>
+<p>Create an administrator password to secure the web interface.</p>
+<label>New Password (minimum 12 characters)</label>
+<input id="setupPassword" type="password" autocomplete="new-password">
+<label>Confirm Password</label>
+<input id="setupConfirm" type="password" autocomplete="new-password">
+<p id="setupError" class="error"></p>
+<button class="primary" onclick="submitInitialSetup()">
+Create Administrator Password
+</button>
+</section>
+</div>
+
+<div id="loginScreen" style="display:none">
+<section>
+<h1>SmartLife / Tuya Login</h1>
+<label>Username</label>
+<input id="loginUser" value="admin" autocomplete="username">
+<label>Password</label>
+<input id="loginPassword" type="password"
+       autocomplete="current-password">
+<button class="primary" onclick="loginUser()">Login</button>
+<button type="button" onclick="showRecovery()">Forgot Password?</button>
+
+<div id="recoveryPanel" style="display:none;margin-top:20px">
+<h2>Reset Administrator Password</h2>
+<p>Recovery requires SSH access to your eisy or Polisy.
+You must know your device's SSH username and password.</p>
+<p>Connect using SSH and run:</p>
+<pre style="white-space:pre-wrap;overflow-wrap:anywhere;background:#eee;padding:12px">cd ~/tuya-fan &amp;&amp; python3 tuya_auth.py reset</pre>
+<p>Enter the recovery code displayed in SSH.
+It expires after 15 minutes.</p>
+<label>Recovery Code</label>
+<input id="recoveryCode" autocomplete="off">
+<label>New Password (minimum 12 characters)</label>
+<input id="recoveryPassword" type="password">
+<label>Confirm New Password</label>
+<input id="recoveryConfirm" type="password">
+<p id="recoveryError" class="error"></p>
+<div class="actions">
+<button class="primary" onclick="submitRecovery()">Reset Password</button>
+<button onclick="hideRecovery()">Cancel</button>
+</div>
+</div>
+<p id="loginError" class="error"></p>
+</section>
+</div>
+<div id="passwordDialog" style="display:none;position:fixed;inset:0;
+background:#0008;z-index:10000;align-items:center;justify-content:center">
+<section style="width:min(400px,90vw);margin:15px">
+<h2>Change Administrator Password</h2>
+<label>Current Password</label>
+<input id="currentPassword" type="password" autocomplete="current-password">
+<label>New Password (minimum 12 characters)</label>
+<input id="newPassword" type="password" autocomplete="new-password">
+<label>Confirm New Password</label>
+<input id="confirmPassword" type="password" autocomplete="new-password">
+<p id="passwordError" class="error"></p>
+<div class="actions">
+<button class="primary" onclick="submitPasswordChange()">Save Password</button>
+<button onclick="closePasswordDialog()">Cancel</button>
+</div>
+</section>
+</div>
+<div id="editor">
 <main>
+<div style="display:flex;justify-content:flex-end;gap:8px">
+<button onclick="openPasswordDialog()">Change Password</button>
+<button id="logoutBtn" onclick="logoutUser()">Logout</button>
+</div>
 <h1>SmartLife / Tuya Configuration</h1>
 <section>
 <h2>Tuya Cloud Accounts</h2>
@@ -819,7 +1119,246 @@ button:disabled{opacity:.55;cursor:wait}
 </div>
 </section>
 </main>
+</div>
 <script>
+
+function showRecovery(){
+ document.getElementById("recoveryPanel").style.display="block";
+}
+function hideRecovery(){
+ document.getElementById("recoveryPanel").style.display="none";
+ for(const id of ["recoveryCode","recoveryPassword","recoveryConfirm"]){
+  document.getElementById(id).value="";
+ }
+ document.getElementById("recoveryError").textContent="";
+}
+async function submitRecovery(){
+ const code=document.getElementById("recoveryCode").value.trim();
+ const password=document.getElementById("recoveryPassword").value;
+ const confirm=document.getElementById("recoveryConfirm").value;
+ const error=document.getElementById("recoveryError");
+ error.textContent="";
+ if(password.length<12 || password!==confirm){
+  error.textContent="Password must be at least 12 characters and match confirmation.";
+  return;
+ }
+ try{
+  const r=await fetch("/api/auth/recover",{
+   method:"POST",
+   credentials:"same-origin",
+   cache:"no-store",
+   headers:{"Content-Type":"application/json"},
+   body:JSON.stringify({
+    code:code,new_password:password,confirm_password:confirm
+   })
+  });
+  if(!r.ok){
+   const d=await r.json();
+   throw Error(d.detail||"Recovery failed");
+  }
+  hideRecovery();
+  showLogin("Password reset. Log in with your new password.");
+ }catch(e){
+  error.textContent=e.message;
+ }
+}
+function openPasswordDialog(){
+ document.getElementById("passwordError").textContent="";
+ document.getElementById("passwordDialog").style.display="flex";
+}
+
+function closePasswordDialog(){
+ for(const id of ["currentPassword","newPassword","confirmPassword"]){
+  document.getElementById(id).value="";
+ }
+ document.getElementById("passwordDialog").style.display="none";
+}
+
+async function submitPasswordChange(){
+ const current=document.getElementById("currentPassword").value;
+ const password=document.getElementById("newPassword").value;
+ const confirm=document.getElementById("confirmPassword").value;
+ const error=document.getElementById("passwordError");
+
+ if(password.length<12){
+  error.textContent="Password must contain at least 12 characters.";
+  return;
+ }
+ if(password!==confirm){
+  error.textContent="New passwords do not match.";
+  return;
+ }
+
+ try{
+  const r=await fetch("/api/auth/change",{
+   method:"POST",
+   credentials:"same-origin",
+   cache:"no-store",
+   headers:{"Content-Type":"application/json"},
+   body:JSON.stringify({
+    current_password:current,
+    new_password:password,
+    confirm_password:confirm
+   })
+  });
+  if(!r.ok){
+   const d=await r.json();
+   throw Error(d.detail||"Password change failed");
+  }
+  closePasswordDialog();
+  showLogin("Password changed. Please log in with your new password.");
+ }catch(e){
+  error.textContent=e.message;
+ }
+}
+
+let authenticated = false;
+let lastActivity = 0;
+const IDLE_LIMIT = 3600000;
+
+function showSetup(){
+ document.getElementById("editor").style.display="none";
+ document.getElementById("loginScreen").style.display="none";
+ document.getElementById("setupScreen").style.display="block";
+ authenticated=false;
+}
+
+async function submitInitialSetup(){
+ const error=document.getElementById("setupError");
+ error.textContent="";
+
+ const password=document.getElementById("setupPassword").value;
+ const confirm=document.getElementById("setupConfirm").value;
+
+ if(password.length<12){
+  error.textContent="Password must contain at least 12 characters";
+  return;
+ }
+
+ if(password!==confirm){
+  error.textContent="Passwords do not match";
+  return;
+ }
+
+ try{
+  const r=await fetch("/api/auth/setup",{
+   method:"POST",
+   credentials:"same-origin",
+   cache:"no-store",
+   headers:{"Content-Type":"application/json"},
+   body:JSON.stringify({password,confirm})
+  });
+
+  const d=await r.json();
+  if(!r.ok)throw Error(d.detail||"Setup failed");
+
+  document.getElementById("setupPassword").value="";
+  document.getElementById("setupConfirm").value="";
+  document.getElementById("setupScreen").style.display="none";
+  showLogin("Administrator password created. Please log in.");
+ }catch(e){
+  error.textContent=e.message;
+ }
+}
+
+function showLogin(message=""){
+ closePasswordDialog();
+ document.getElementById("editor").style.display="none";
+ document.getElementById("loginScreen").style.display="block";
+ document.getElementById("loginError").textContent=message;
+ authenticated=false;
+}
+
+function showEditor(){
+ document.getElementById("loginScreen").style.display="none";
+ document.getElementById("editor").style.display="block";
+ authenticated=true;
+ lastActivity=Date.now();
+}
+
+async function loginUser(){
+ const error=document.getElementById("loginError");
+ error.textContent="";
+ try{
+  const r=await fetch("/api/auth/login",{
+   method:"POST",
+   credentials:"same-origin",
+   cache:"no-store",
+   headers:{"Content-Type":"application/json"},
+   body:JSON.stringify({
+    username:document.getElementById("loginUser").value,
+    password:document.getElementById("loginPassword").value
+   })
+  });
+  if(!r.ok)throw Error("Invalid username or password");
+  document.getElementById("loginPassword").value="";
+  showEditor();
+  await loadAccounts();
+  await loadInventory();
+ }catch(e){
+  showLogin(e.message);
+ }
+}
+
+async function logoutUser(){
+ try{
+  await fetch("/api/auth/logout",{
+   method:"POST",
+   credentials:"same-origin",
+   cache:"no-store"
+  });
+ }finally{
+  cloudRecords=[];
+  lanRecords=[];
+  showLogin();
+ }
+}
+
+async function initializeAuthentication(){
+ try{
+  const r=await fetch("/api/auth/status",{
+   credentials:"same-origin",cache:"no-store"
+  });
+  const d=await r.json();
+  if(!d.configured){
+   showSetup();
+  }else if(d.authenticated){
+   showEditor();
+   await loadAccounts();
+   await loadInventory();
+  }else{
+   showLogin();
+  }
+ }catch(e){
+  showLogin("Unable to contact server");
+ }
+}
+
+["pointerdown","keydown"].forEach(eventName=>{
+ document.addEventListener(eventName,()=>{
+  if(authenticated)lastActivity=Date.now();
+ },{passive:true});
+});
+
+setInterval(async ()=>{
+ if(!authenticated)return;
+ if(Date.now()-lastActivity>=60000)return;
+ try{
+  const r=await fetch("/api/auth/heartbeat",{
+   method:"POST",
+   credentials:"same-origin",
+   cache:"no-store"
+  });
+  if(r.status===401)showLogin("Session expired. Please log in again.");
+ }catch(e){}
+},30000);
+
+setInterval(()=>{
+ if(authenticated && Date.now()-lastActivity>=IDLE_LIMIT){
+  logoutUser();
+ }
+},30000);
+
 let cloudRecords = [];
 let lanRecords = [];
 let showKeys = false;
@@ -918,8 +1457,19 @@ function status(msg,error=false,busy=false){
  }
  e.appendChild(document.createTextNode(msg));
 }
-async function request(url,options){
- const r=await fetch(url,{cache:"no-store",...options});
+async function request(url,options={}){
+ const headers=new Headers(options.headers||{});
+
+ const r=await fetch(url,{
+  ...options,
+  cache:"no-store",
+  credentials:"same-origin",
+  headers
+ });
+ if(r.status===401){
+  showLogin("Session expired. Please log in again.");
+  throw Error("Session expired");
+ }
  const d=await r.json();
  if(!r.ok)throw Error(d.detail||"Request failed");
  return d;
@@ -1431,8 +1981,7 @@ function previewSelected(){
  status("Configuration preview generated. No PG3x settings changed.");
 }
 
-loadAccounts().catch(e=>status(e.message,true));
-loadInventory();
+initializeAuthentication();
 
 // Reconcile pending configuration with the live node-server inventory.
 setInterval(() => {
@@ -1455,11 +2004,23 @@ setInterval(() => {
 """
 
 if __name__ == "__main__":
+    identity = json.loads(IDENTITY_FILE.read_text())
+    profile = str(identity.get("profileNum", ""))
+
+    if not profile.isdigit():
+        raise RuntimeError("Invalid PG3x profile number")
+
+    cert = BASE / f"plugin_{profile}.cert"
+    key = BASE / f"plugin_{profile}.key"
+
+    if not cert.is_file() or not key.is_file():
+        raise RuntimeError(f"HTTPS certificate or key missing for slot {profile}")
+
     uvicorn.run(
         app,
         host="0.0.0.0",
         port=8767,
-        ssl_certfile=str(BASE / "plugin_22.cert"),
-        ssl_keyfile=str(BASE / "plugin_22.key"),
+        ssl_certfile=str(cert),
+        ssl_keyfile=str(key),
         access_log=False
     )

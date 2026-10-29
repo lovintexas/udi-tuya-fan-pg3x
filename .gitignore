@@ -13,3 +13,17 @@ tuya-raw.json
 
 # Local backup files
 *.before-*
+
+# Web authentication and recovery
+data/
+tuya_web_password.txt
+tuya_web_accounts.json
+
+# Runtime device configuration and inventory
+tuya_devices.json
+tuya_inventory.json
+tuya_identity.json
+
+# Local development backups
+*.v1
+*.bak

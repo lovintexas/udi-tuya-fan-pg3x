@@ -1,2 +1,4 @@
 tinytuya==1.20.0
 udi-interface
+fastapi
+uvicorn

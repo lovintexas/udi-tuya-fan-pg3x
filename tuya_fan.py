@@ -5,6 +5,9 @@ import json
 
 import time
 import threading
+import subprocess
+import sys
+import atexit
 import tinytuya
 import udi_interface
 
@@ -1273,8 +1276,57 @@ def poll_handler(poll_type):
         LOGGER.error(f"Poll failed: {ex}")
 
 
+
+
+web_process = None
+
+
+def start_web_editor():
+    """Start the HTTPS editor as a child of this node server."""
+    global web_process
+
+    if web_process is not None and web_process.poll() is None:
+        return
+
+    try:
+        web_process = subprocess.Popen(
+            [sys.executable, str(Path(__file__).resolve().parent / "tuya_web.py")],
+            cwd=str(Path(__file__).resolve().parent),
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            env={**os.environ, "TUYA_MANAGED_WEB": "1"},
+        )
+        LOGGER.info("Started Tuya HTTPS editor (PID %s)", web_process.pid)
+    except Exception:
+        LOGGER.exception("Unable to start Tuya HTTPS editor")
+        web_process = None
+
+
+def stop_web_editor():
+    """Stop only the HTTPS editor started by this instance."""
+    global web_process
+
+    if web_process is None:
+        return
+
+    if web_process.poll() is None:
+        web_process.terminate()
+        try:
+            web_process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            web_process.kill()
+            web_process.wait()
+
+    web_process = None
+
+
+atexit.register(stop_web_editor)
+
+
 def stop_handler():
     LOGGER.info("Smart Life / Tuya plugin stopping")
+    stop_web_editor()
     polyglot.stop()
 
 
@@ -1335,6 +1387,8 @@ if __name__ == "__main__":
         time.sleep(1)
 
         controller.start()
+
+        start_web_editor()
 
         polyglot.runForever()
 
