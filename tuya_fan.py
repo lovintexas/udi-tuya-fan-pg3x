@@ -1,3 +1,6 @@
+from pathlib import Path
+import os
+import json
 #!/usr/bin/env python3
 
 import time
@@ -757,6 +760,169 @@ class Controller(udi_interface.Node):
                         "version": version or "3.5",
                     })
 
+
+            # Merge devices saved by the discovery web interface.
+            # PG3x Custom Parameters take precedence.
+            config_lists = {
+                "fan": fan_configs,
+                "switch": switch_configs,
+                "outlet": outlet_configs,
+                "dehumidifier": dehumidifier_configs,
+            }
+
+            json_file = Path(__file__).resolve().parent / "tuya_devices.json"
+
+            try:
+                if json_file.exists():
+                    data = json.loads(json_file.read_text())
+                    if not isinstance(data, dict) or not isinstance(
+                        data.get("devices"), list
+                    ):
+                        raise ValueError("Invalid device configuration format")
+
+                    existing_ids = {
+                        str(c["id"])
+                        for configs in config_lists.values()
+                        for c in configs
+                    }
+
+                    for device in data["devices"]:
+                        try:
+                            if not isinstance(device, dict):
+                                raise ValueError("Device entry must be an object")
+
+                            device_type = device.get("type")
+                            if device_type not in config_lists:
+                                raise ValueError("Unsupported device type")
+
+                            device_id = str(device.get("id") or "").strip()
+                            name = str(device.get("name") or "").strip()
+                            ip = str(device.get("ip") or "").strip()
+                            key = device.get("key")
+                            version = str(device.get("version") or "").strip()
+
+                            if not all((device_id, name, ip, key, version)):
+                                raise ValueError("Incomplete device entry")
+
+                            if device_id in existing_ids:
+                                LOGGER.info(
+                                    "Skipping already configured Tuya device %s",
+                                    name
+                                )
+                                continue
+
+                            configs = config_lists[device_type]
+                            used_addresses = {
+                                c["address"] for c in configs
+                            }
+
+                            address = device.get("address")
+                            if not isinstance(address, str):
+                                raise ValueError("Missing permanent IoX address")
+
+                            valid_addresses = {
+                                f"{device_type}{n}" for n in range(1, 17)
+                            }
+                            if address not in valid_addresses:
+                                raise ValueError("Invalid IoX address")
+
+                            if address in used_addresses:
+                                LOGGER.warning(
+                                    "IoX address %s already occupied; skipping %s",
+                                    address, name
+                                )
+                                continue
+
+                            configs.append({
+                                "name": name,
+                                "address": address,
+                                "id": device_id,
+                                "ip": ip,
+                                "key": key,
+                                "version": version,
+                            })
+
+                            existing_ids.add(device_id)
+
+                            LOGGER.info(
+                                "Added %s from discovery configuration: %s",
+                                device_type, name
+                            )
+
+                        except Exception as ex:
+                            LOGGER.warning(
+                                "Skipping invalid discovery device: %s", ex
+                            )
+
+            except Exception as ex:
+                LOGGER.error(
+                    "Could not load discovery device configuration: %s", ex
+                )
+
+            # Apply replacement credentials without changing IoX node identity.
+            replacements_file = (
+                Path(__file__).resolve().parent / "tuya_replacements.json"
+            )
+
+            if replacements_file.exists():
+                try:
+                    replacements = json.loads(replacements_file.read_text())
+                    entries = replacements["replacements"]
+                    if not isinstance(entries, list):
+                        raise ValueError("Invalid replacements list")
+
+                    valid_types = set(config_lists)
+                    addresses = {}
+                    for dtype, configs in config_lists.items():
+                        for config in configs:
+                            addresses[config["address"]] = (dtype, config)
+
+                    seen = set()
+                    updates = []
+                    for entry in entries:
+                        dtype = entry["type"]
+                        address = entry["address"]
+
+                        if dtype not in valid_types or address not in addresses:
+                            raise ValueError("Unknown replacement target")
+                        if addresses[address][0] != dtype:
+                            raise ValueError("Replacement type mismatch")
+                        if address in seen:
+                            raise ValueError("Duplicate replacement address")
+                        seen.add(address)
+
+                        fields = ("id", "ip", "key", "version")
+                        if any(
+                            not isinstance(entry.get(k), str) or not entry[k]
+                            for k in fields
+                        ):
+                            raise ValueError("Incomplete replacement credentials")
+
+                        updates.append((addresses[address][1], entry))
+
+                    final_ids = {
+                        config["address"]: config["id"]
+                        for configs in config_lists.values()
+                        for config in configs
+                    }
+                    for config, entry in updates:
+                        final_ids[config["address"]] = entry["id"]
+                    if len(final_ids.values()) != len(set(final_ids.values())):
+                        raise ValueError("Duplicate Tuya device ID")
+
+                    for config, entry in updates:
+                        for field in fields:
+                            config[field] = entry[field]
+
+                    LOGGER.info(
+                        "Applied %d Tuya device replacements", len(updates)
+                    )
+
+                except Exception:
+                    LOGGER.exception(
+                        "Replacement configuration invalid; using original settings"
+                    )
+
             if not fan_configs and not switch_configs and not outlet_configs and not dehumidifier_configs:
                 LOGGER.warning(
                     "No complete Tuya device configuration found in Custom Parameters"
@@ -890,6 +1056,28 @@ class Controller(udi_interface.Node):
                 except Exception:
                     LOGGER.exception("Failed to initialize %s", config["name"])
 
+            try:
+                # Publish a key-free inventory for the discovery web interface.
+                inventory = []
+                for device_type, configs in config_lists.items():
+                    for config in configs:
+                        inventory.append({
+                            "type": device_type,
+                            "name": config["name"],
+                            "id": config["id"],
+                            "address": config["address"],
+                        })
+
+                inventory_file = Path(__file__).resolve().parent / "tuya_inventory.json"
+                temp_file = inventory_file.with_suffix(".tmp")
+                temp_file.write_text(json.dumps({"devices": inventory}, indent=2))
+                os.chmod(temp_file, 0o600)
+                temp_file.replace(inventory_file)
+
+                LOGGER.info("Published inventory of %d configured devices", len(inventory))
+            except Exception:
+                LOGGER.exception("Could not publish device inventory")
+
             self.setDriver("ST", 1)
 
         except Exception as ex:
@@ -931,6 +1119,135 @@ class Controller(udi_interface.Node):
 controller = None
 pending_params = {}
 
+pending_deletions = {}
+pending_deletions_lock = threading.Lock()
+
+
+def delete_node_done(result):
+    if not isinstance(result, dict):
+        return
+
+    address = result.get("address")
+    if not isinstance(address, str):
+        return
+
+    with pending_deletions_lock:
+        event = pending_deletions.get(address)
+
+    if event is not None:
+        event.set()
+
+
+def custom_request_handler(request):
+    if not isinstance(request, dict):
+        return
+
+    request_id = request.get("requestId")
+    payload = request.get("payload")
+
+    if not isinstance(request_id, str) or not isinstance(payload, dict):
+        return
+
+    if payload.get("action") == "restart_ns":
+        LOGGER.info(
+            "Restart requested for this node server "
+            "(UUID=%s, slot=%s)",
+            polyglot.uuid, polyglot.profileNum
+        )
+
+        polyglot.customResponse(
+            request_id,
+            {"restarting": True, "profileNum": polyglot.profileNum}
+        )
+
+        polyglot.send({"restart": {}}, "system")
+        return
+
+    if payload.get("action") != "delete_node":
+        polyglot.customResponseError(
+            request_id, errorMessage="Unsupported request", status=400
+        )
+        return
+
+    address = payload.get("address")
+    valid_types = ("fan", "switch", "outlet", "dehumidifier")
+
+    if not isinstance(address, str) or not any(
+        address == f"{device_type}{n}"
+        for device_type in valid_types
+        for n in range(1, 17)
+    ):
+        polyglot.customResponseError(
+            request_id, errorMessage="Invalid node address", status=400
+        )
+        return
+
+    if address not in polyglot.nodes_internal:
+        polyglot.customResponseError(
+            request_id, errorMessage="Node not found", status=404
+        )
+        return
+
+    event = threading.Event()
+
+    with pending_deletions_lock:
+        if address in pending_deletions:
+            polyglot.customResponseError(
+                request_id, errorMessage="Deletion already in progress",
+                status=409
+            )
+            return
+        pending_deletions[address] = event
+
+    try:
+        polyglot.delNode(address)
+
+        if not event.wait(20):
+            polyglot.customResponseError(
+                request_id,
+                errorMessage="Timed out waiting for IoX node deletion",
+                status=504
+            )
+            return
+
+        # Update the web-interface inventory after confirmed IoX deletion.
+        inventory_file = Path(__file__).resolve().parent / "tuya_inventory.json"
+        inventory = json.loads(inventory_file.read_text())
+        devices = inventory.get("devices")
+
+        if not isinstance(devices, list):
+            raise ValueError("Invalid Tuya inventory")
+
+        remaining = [
+            device for device in devices
+            if device.get("address") != address
+        ]
+
+        if len(remaining) == len(devices):
+            raise ValueError(f"{address} missing from inventory")
+
+        inventory["devices"] = remaining
+
+        temp_file = inventory_file.with_suffix(".tmp")
+        temp_file.write_text(json.dumps(inventory, indent=2))
+        os.chmod(temp_file, 0o600)
+        temp_file.replace(inventory_file)
+
+        LOGGER.info("Removed %s from Tuya inventory", address)
+
+        polyglot.customResponse(
+            request_id, {"address": address, "deleted": True}
+        )
+
+    except Exception as ex:
+        LOGGER.exception("Failed to delete node %s", address)
+        polyglot.customResponseError(
+            request_id, errorMessage="Node deletion failed", status=500
+        )
+    finally:
+        with pending_deletions_lock:
+            pending_deletions.pop(address, None)
+
 
 def custom_params_handler(params):
     global pending_params
@@ -965,6 +1282,22 @@ if __name__ == "__main__":
     try:
         polyglot = udi_interface.Interface([])
 
+        # Publish this instance's PG3x identity for the web interface.
+        identity_file = Path(__file__).resolve().parent / "tuya_identity.json"
+        identity = {
+            "uuid": polyglot.uuid,
+            "profileNum": str(polyglot.profileNum)
+        }
+        temp_file = identity_file.with_suffix(".tmp")
+        temp_file.write_text(json.dumps(identity))
+        os.chmod(temp_file, 0o600)
+        temp_file.replace(identity_file)
+
+        LOGGER.info(
+            "Published web interface identity: UUID=%s, slot=%s",
+            polyglot.uuid, polyglot.profileNum
+        )
+
         polyglot.start("1.3.3")
 
         polyglot.subscribe(
@@ -980,6 +1313,16 @@ if __name__ == "__main__":
         polyglot.subscribe(
             polyglot.STOP,
             stop_handler
+        )
+
+        polyglot.subscribe(
+            polyglot.CUSTOMREQUEST,
+            custom_request_handler
+        )
+
+        polyglot.subscribe(
+            polyglot.DELNODEDONE,
+            delete_node_done
         )
 
         polyglot.ready()
