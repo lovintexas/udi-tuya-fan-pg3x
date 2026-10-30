@@ -36,6 +36,85 @@ footer{padding:0 22px 35px;color:var(--muted);font-size:13px}@media(max-width:65
 <div class="callout ok"><strong>Smart Life / Tuya:</strong> devices are initially paired and associated with a Smart Life or Tuya account. After the Device ID and Local Key are obtained, normal plugin operation is local.</div>
 </section>
 
+<section class="card"><h2>Version 1.4.0 — Web Configuration Interface</h2>
+
+<p class="lead">Version 1.4.0 adds a browser-based HTTPS configuration interface for discovering, configuring, and managing Smart Life / Tuya devices.</p>
+
+<div class="callout ok">
+<strong>Web interface address:</strong>
+<code>https://&lt;eisy-ip-address&gt;:8767/</code>
+<p>Replace the example address with the IP address of your eisy or Polisy.</p>
+</div>
+
+<h3>1. First-Time Administrator Setup</h3>
+<p>On a new installation, open the web interface in your browser. Instead of a login screen, you will be prompted to create an administrator password.</p>
+<ol>
+<li>Enter a password containing at least 12 characters.</li>
+<li>Enter the password again for confirmation.</li>
+<li>Select <strong>Create Administrator Password</strong>.</li>
+<li>Once created, the password is required for subsequent access.</li>
+</ol>
+<p>No SSH access or temporary setup code is required for initial password creation. Only the first successful setup request can establish the administrator password.</p>
+
+<h3>2. Login, Logout, and Sessions</h3>
+<p>After initial setup, enter the username <code>admin</code> and your administrator password.</p>
+<ul>
+<li>The web interface maintains an authenticated browser session.</li>
+<li>Sessions expire after one hour of inactivity.</li>
+<li>Use the Logout control when finished, particularly on shared computers.</li>
+<li>The Change Password control allows you to change your administrator password while logged in.</li>
+</ul>
+
+<h3>3. Forgotten Administrator Password</h3>
+<p>Password recovery requires SSH access to the eisy or Polisy. You must know the device's SSH username and password.</p>
+<ol>
+<li>Connect to the eisy using SSH.</li>
+<li>Run the following commands:</li>
+</ol>
+<pre><code>cd ~/tuya-fan
+python3 tuya_auth.py reset</code></pre>
+<ol start="3">
+<li>Follow the instructions displayed in the SSH session to obtain a recovery code.</li>
+<li>Return to the web login page and select <strong>Forgot Password?</strong>.</li>
+<li>Enter the recovery code and your new password.</li>
+<li>Complete the password reset.</li>
+</ol>
+<div class="callout">Recovery codes expire after 15 minutes. A successful password reset invalidates existing login sessions.</div>
+
+<h3>4. Tuya Cloud Accounts</h3>
+<p>The web interface supports multiple Tuya cloud accounts. Enter the account name, region, Access ID, Access Secret, and optional Device ID.</p>
+<p>Cloud account information is used to retrieve device information and Local Keys. Routine device control continues to operate locally.</p>
+
+<h3>5. Device Discovery</h3>
+<p>Two discovery methods are available:</p>
+<ul>
+<li><strong>Cloud discovery:</strong> Select a configured cloud account and retrieve its devices and associated Local Keys.</li>
+<li><strong>Local network scan:</strong> Scan the LAN for discoverable Tuya devices and obtain their local network information.</li>
+</ul>
+<p>Discovered devices are displayed in the device inventory with their names, types, Device IDs, IP addresses, protocol versions, discovery sources, and Local Keys.</p>
+
+<h3>6. Device Inventory and Configuration</h3>
+<p>The inventory allows you to review discovered devices and manage the devices configured for the plugin.</p>
+<ul>
+<li>Select devices to include in the configuration.</li>
+<li>Preview the resulting configuration before saving.</li>
+<li>Save selected devices to the node-server configuration.</li>
+<li>Test device connectivity where supported.</li>
+<li>Replace or delete managed devices using the available device actions.</li>
+<li>Review the inventory for changes and pending configuration updates.</li>
+</ul>
+<p>The interface supports up to 16 devices of each supported type: fans, power-monitoring switches, simple outlets, and dehumidifiers.</p>
+
+<h3>7. Applying Changes</h3>
+<p>Saving a device configuration does not immediately apply it to the running node server. Use the <strong>Restart Node Server</strong> control after saving changes to apply the new configuration.</p>
+<div class="callout ok">The web interface starts and stops automatically with the PG3x node server. A separate manual web-server launch is not normally required.</div>
+
+<h3>8. Browser and HTTPS Notes</h3>
+<p>The configuration interface uses HTTPS on TCP port 8767. Because the interface uses a plugin-provided certificate, your browser may display a certificate trust warning. Verify that you are connecting to the correct eisy or Polisy before proceeding.</p>
+<p>The interface is available to devices that can reach the eisy or Polisy on the local network. Protect your administrator password and do not expose the management interface directly to the public Internet.</p>
+
+</section>
+
 <section class="card"><h2>Smart Life / Tuya Setup</h2>
 <p class="lead">Before the plugin can control a supported device locally, you must obtain several pieces of information about the Tuya device: its <strong>Device ID</strong>, <strong>Local Key</strong>, <strong>local IP address</strong>, and <strong>Tuya protocol version</strong>. The easiest method is to first add the device to Smart Life or Tuya Smart, create a Tuya developer project, and then run the TinyTuya setup wizard on the eisy.</p>
 
@@ -324,16 +403,28 @@ Done.</code></pre>
 <ul>
 <li>If a fan's IP address changes, update the corresponding <code>fan*_ip</code> parameter or use a DHCP reservation.</li>
 <li>If a device is reset, removed, or re-paired, its Local Key may change. Run the TinyTuya wizard again to obtain the current key.</li>
-<li><strong>Local communication failure:</strong> if the fan continues to work through the Smart Life/Tuya app but stops responding to the plugin, completely power-cycle the fan/controller by removing AC power and restoring it. Testing has shown that a controller can remain online and accessible through the Tuya cloud while its local Tuya protocol stops responding. A full power cycle can restore local LAN communication.</li>
+<li><strong>Local communication failure:</strong> if a fan continues to work through the Smart Life/Tuya app but stops responding to the plugin, completely power-cycle the fan/controller by removing AC power and restoring it. A full power cycle can restore local LAN communication.</li>
 <li>After changing Custom Parameters, restart the plugin.</li>
+<li><strong>Web page unavailable:</strong> verify that the node server is running and that TCP port 8767 is reachable from your browser.</li>
+<li><strong>Browser certificate warning:</strong> verify the eisy or Polisy IP address and that you are using HTTPS.</li>
+<li><strong>Login rejected:</strong> verify the administrator username and password. The username is <code>admin</code>.</li>
+<li><strong>Forgotten password:</strong> use the SSH-assisted recovery procedure described above. Recovery requires the device SSH username and password.</li>
+<li><strong>Web editor stops unexpectedly:</strong> check that the Smart Life / Tuya node server is running in PG3x. The web editor is managed by the node server and shuts down when its parent node server stops.</li>
 </ul>
 </section>
 
 <section class="card"><h2>Security Notes</h2>
 <ul>
 <li>The Tuya Local Key is a credential. Do not publish it or commit it to Git.</li>
-<li>Do not include Local Keys, Tuya API secrets, or other credentials in screenshots, logs, or public support requests.</li>
+<li>Do not include Local Keys, Tuya API secrets, administrator passwords, or other credentials in screenshots, logs, or public support requests.</li>
 <li>Configuration credentials are stored in PG3x Custom Parameters rather than in this repository.</li>
+<li>The web interface uses HTTPS and requires administrator authentication after initial setup.</li>
+<li>Administrator passwords are stored as salted PBKDF2-SHA256 hashes rather than plaintext passwords.</li>
+<li>Browser sessions use secure, HTTP-only cookies and expire after one hour of inactivity.</li>
+<li>Configuration-changing requests are protected by request-origin validation.</li>
+<li>Initial password setup is available only while no administrator password has been configured.</li>
+<li>Password recovery requires SSH access to the eisy or Polisy. Keep the SSH username and password secure.</li>
+<li>Do not forward TCP port 8767 to the public Internet. The web interface is intended for trusted local-network access.</li>
 </ul>
 </section>
 
@@ -388,8 +479,8 @@ Done.</code></pre>
 </section>
 
 <section class="card"><h2>Version</h2>
-<p><strong>Current version: 1.3.1</strong></p>
-<p class="small">Version 1.3.1 adds eight individual dehumidifier fault indicators decoded from the device fault bitmap, allowing multiple simultaneous faults to be reported. Individual fault indicators await hardware validation. Existing ceiling fan, power-monitoring switch, and simple outlet support remains available.</p>
+<p><strong>Current version: 1.4.0</strong></p>
+<p class="small">Version 1.4.0 adds the HTTPS web configuration interface, first-time administrator password setup, authenticated sessions, password changes and recovery, cloud account management, device discovery, local network scanning, device inventory, configuration management, and automatic web-server startup and shutdown. Existing ceiling fan, power-monitoring switch, simple outlet, and dehumidifier support is retained.</p>
 </section>
 
 </main>
