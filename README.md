@@ -256,7 +256,37 @@ Configuration is stored in PG3x Custom Parameters rather than in this repository
 
 ## Version
 
-Current version: 1.3.1
+Current version: 1.4.0
+
+## Web Configuration Interface
+
+Smart Life / Tuya Control includes an HTTPS web interface for device
+discovery and configuration management.
+
+Open the following address in a browser, replacing the IP address
+with the address of your eisy or Polisy:
+
+`https://<eisy-ip>:8767/`
+
+On a new installation, create an administrator password directly
+from the web interface. Subsequent visits require administrator login.
+
+The interface supports:
+
+- Managing multiple Tuya cloud accounts.
+- Retrieving cloud device information and local keys.
+- Scanning the local network for Tuya devices.
+- Viewing device inventory and managing selected devices.
+- Testing devices and restarting the node server.
+- Changing the administrator password.
+
+Sessions expire after one hour of inactivity. Password recovery
+requires SSH access to the eisy or Polisy and the device's SSH
+username and password. Recovery instructions are provided on the
+login page.
+
+The web interface starts and stops automatically with the node server.
+HTTPS is used for browser connections.
 
 ## Obtaining Your Smart Life / Tuya Device Information
 

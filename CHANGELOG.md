@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.4.0
+
+- Added an HTTPS web configuration interface on port 8767.
+- Added first-time administrator password creation through the browser.
+- Added administrator login, logout, password changes, and SSH-assisted recovery.
+- Added secure password hashing, session cookies, and one-hour idle expiration.
+- Added request-origin validation and protection for configuration-changing requests.
+- Added automatic web-interface startup and shutdown with the PG3x node server.
+- Added automatic HTTPS certificate selection based on the installed PG3x slot.
+- Added cloud account management, device discovery, local-network scanning,
+  device inventory, configuration management, device testing, and node-server restart.
+- Added FastAPI and Uvicorn to installation requirements.
+
 ## 1.3.3
 
 - Fixed fan status reporting compatibility with IoX 6.1.2.

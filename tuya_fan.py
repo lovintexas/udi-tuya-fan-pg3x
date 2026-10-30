@@ -1350,7 +1350,7 @@ if __name__ == "__main__":
             polyglot.uuid, polyglot.profileNum
         )
 
-        polyglot.start("1.3.3")
+        polyglot.start("1.4.0")
 
         polyglot.subscribe(
             polyglot.CUSTOMPARAMS,
