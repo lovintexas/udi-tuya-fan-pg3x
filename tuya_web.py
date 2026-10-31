@@ -865,11 +865,253 @@ def cloud_devices(account: str):
         raise HTTPException(502, "Cloud retrieval failed; check account credentials")
 
 
+@app.get("/api/credentials/verify", dependencies=[Depends(authenticate)])
+def verify_credentials():
+    """Compare configured local keys with Tuya Cloud without changing them."""
+    with lock:
+        response = read_eisy_customparams()
+        if response.get("successful") is not True:
+            raise HTTPException(503, "Could not read eisy-ui configuration")
+
+        params = response.get("data")
+        if not isinstance(params, dict):
+            raise HTTPException(503, "Invalid eisy-ui configuration")
+
+        configured = {}
+        for kind in ("fan", "switch", "outlet", "dehumidifier"):
+            for n in range(1, 17):
+                address = f"{kind}{n}"
+                device_id = str(params.get(f"{address}_id") or "").strip()
+                if device_id:
+                    configured[address] = {
+                        "id": device_id,
+                        "name": params.get(f"{address}_name") or address,
+                        "key": params.get(f"{address}_key") or ""
+                    }
+
+        accounts_config = read_accounts()
+
+    cloud_keys = {}
+    account_errors = []
+
+    for account_name, config in accounts_config.items():
+        try:
+            cloud = tinytuya.Cloud(
+                apiRegion=config["apiRegion"],
+                apiKey=config["apiKey"],
+                apiSecret=config["apiSecret"],
+                apiDeviceID=config["apiDeviceID"]
+            )
+            cloud.use_old_device_list = False
+            devices = cloud.getdevices()
+
+            if not isinstance(devices, list):
+                raise ValueError("Invalid cloud response")
+
+            for device in devices:
+                if not isinstance(device, dict):
+                    continue
+
+                device_id = str(device.get("id") or "").strip()
+                key = device.get("key")
+
+                if not device_id:
+                    continue
+
+                record = cloud_keys.setdefault(device_id, {
+                    "keys": set(),
+                    "invalid": False
+                })
+
+                if (
+                    not isinstance(key, str)
+                    or len(key) != 16
+                    or key == device_id
+                ):
+                    record["invalid"] = True
+                else:
+                    record["keys"].add(key)
+
+        except Exception:
+            account_errors.append(account_name)
+
+    results = []
+
+    for address, device in configured.items():
+        device_id = device["id"]
+        stored_key = device["key"]
+        record = cloud_keys.get(device_id)
+
+        if not record:
+            status = "unverified" if account_errors else "not_found"
+        elif record["invalid"] or len(record["keys"]) != 1:
+            status = "conflict_or_invalid"
+        elif stored_key == next(iter(record["keys"])):
+            status = "match"
+        else:
+            status = "mismatch"
+
+        results.append({
+            "address": address,
+            "name": device["name"],
+            "status": status
+        })
+
+    return {
+        "ok": True,
+        "devices": results,
+        "account_errors": account_errors,
+        "read_only": True
+    }
+
+
+
+class CredentialRefreshRequest(BaseModel):
+    addresses: list[str]
+
+
+@app.post("/api/credentials/refresh", dependencies=[Depends(authenticate)])
+def refresh_credentials(request: CredentialRefreshRequest):
+    """Refresh selected mismatched local keys from Tuya Cloud."""
+    allowed = {
+        f"{kind}{n}"
+        for kind in ("fan", "switch", "outlet", "dehumidifier")
+        for n in range(1, 17)
+    }
+
+    addresses = request.addresses
+
+    if not addresses or len(addresses) != len(set(addresses)):
+        raise HTTPException(400, "Select unique devices to refresh")
+
+    if any(address not in allowed for address in addresses):
+        raise HTTPException(400, "Invalid device address")
+
+    # Read Cloud accounts without holding the lock during network requests.
+    with lock:
+        accounts = read_accounts()
+
+    if not accounts:
+        raise HTTPException(409, "No Tuya Cloud accounts configured")
+
+    cloud_keys = {}
+
+    for account_name, config in accounts.items():
+        try:
+            cloud = tinytuya.Cloud(
+                apiRegion=config["apiRegion"],
+                apiKey=config["apiKey"],
+                apiSecret=config["apiSecret"],
+                apiDeviceID=config["apiDeviceID"]
+            )
+            cloud.use_old_device_list = False
+            devices = cloud.getdevices()
+
+            if not isinstance(devices, list):
+                raise ValueError("Invalid Cloud response")
+
+            for device in devices:
+                if not isinstance(device, dict):
+                    continue
+
+                device_id = str(device.get("id") or "").strip()
+                key = device.get("key")
+
+                if not device_id:
+                    continue
+
+                record = cloud_keys.setdefault(
+                    device_id, {"keys": set(), "invalid": False}
+                )
+
+                if (
+                    not isinstance(key, str)
+                    or len(key) != 16
+                    or key == device_id
+                ):
+                    record["invalid"] = True
+                else:
+                    record["keys"].add(key)
+
+        except Exception:
+            raise HTTPException(
+                502,
+                f"Cloud retrieval failed for account {account_name}; "
+                "no credentials were changed"
+            )
+
+    with lock:
+        try:
+            response = read_eisy_customparams()
+
+            if response.get("successful") is not True:
+                raise HTTPException(503, "Could not read eisy-ui configuration")
+
+            params = response.get("data")
+
+            if not isinstance(params, dict):
+                raise HTTPException(503, "Invalid eisy-ui configuration")
+
+            updated = params.copy()
+            changed = []
+
+            # Validate every requested device before writing anything.
+            for address in addresses:
+                device_id = str(params.get(f"{address}_id") or "").strip()
+                stored_key = params.get(f"{address}_key") or ""
+
+                if not device_id:
+                    raise HTTPException(
+                        409, f"{address} is no longer configured"
+                    )
+
+                record = cloud_keys.get(device_id)
+
+                if (
+                    not record
+                    or record["invalid"]
+                    or len(record["keys"]) != 1
+                ):
+                    raise HTTPException(
+                        409,
+                        f"{address} has no unique valid Cloud key; "
+                        "no credentials were changed"
+                    )
+
+                cloud_key = next(iter(record["keys"]))
+
+                if stored_key != cloud_key:
+                    updated[f"{address}_key"] = cloud_key
+                    changed.append(address)
+
+            if changed:
+                write_eisy_customparams(updated)
+
+            return {
+                "ok": True,
+                "updated": changed,
+                "count": len(changed),
+                "restart_required": bool(changed),
+                "message": (
+                    "Credentials updated. Restart node server to apply."
+                    if changed else "All selected credentials already match."
+                )
+            }
+
+        except HTTPException:
+            raise
+        except Exception:
+            raise HTTPException(
+                503,
+                "Credential refresh failed; check eisy-ui configuration"
+            )
+
+
 @app.get("/api/scan", dependencies=[Depends(authenticate)])
 def scan():
     try:
         result = tinytuya.deviceScan(
-            verbose=False, maxretry=2, color=False
+            verbose=False, color=False
         )
         return {"devices": [{
             "name": d.get("name", ""),
@@ -1096,6 +1338,7 @@ background:#0008;z-index:10000;align-items:center;justify-content:center">
 <select id="accounts"></select>
 <button class="primary" onclick="getCloud()">Retrieve Cloud Devices &amp; Keys</button>
 <button onclick="scanLAN()">Scan Local Network</button>
+<button onclick="verifyCredentials()">Verify Credentials</button>
 <button id="restartBtn" onclick="restartNodeServer()">Restart Node Server</button>
 <button onclick="toggleKeys()">Show / Hide Keys</button>
 </div>
@@ -1451,6 +1694,9 @@ function status(msg,error=false,busy=false){
  const e=document.getElementById("status");
  e.replaceChildren();
  e.className=error?"error":"note";
+ e.style.fontSize=busy?"22px":"";
+ e.style.fontWeight=busy?"bold":"";
+ e.style.padding=busy?"12px 0":"";
  if(busy){
   const spinner=document.createElement("span");
   spinner.className="spinner";e.appendChild(spinner);
@@ -1547,6 +1793,65 @@ async function restartNodeServer(){
   showRestartModal("Restart failed: "+e.message,false);
  }finally{
   btn.disabled=false;
+ }
+}
+
+
+async function verifyCredentials(){
+ try{
+  status("Verifying configured device credentials...",false,true);
+  const result=await request("/api/credentials/verify");
+
+  const devices=result.devices||[];
+  const mismatches=devices.filter(d=>d.status==="mismatch");
+  const errors=result.account_errors||[];
+
+  const lines=devices.map(d=>
+   `${d.name} (${d.address}): ${d.status}`
+  );
+
+  const summary=lines.join("\n")+
+   (errors.length?"\nCloud account errors: "+errors.join(", "):"");
+
+  alert("Credential Verification (read-only)\n\n"+summary);
+
+  status(`${devices.length} devices checked; ${mismatches.length} mismatches.`);
+
+  if(errors.length){
+   status("Cloud account errors detected. Credential refresh unavailable.",true);
+   return;
+  }
+
+  if(!mismatches.length)return;
+
+  const names=mismatches.map(d=>`${d.name} (${d.address})`).join("\n");
+
+  if(!confirm(
+   "Refresh credentials for these devices?\n\n"+
+   names+
+   "\n\nOnly their local keys will be updated. "+
+   "A node server restart will be required."
+  ))return;
+
+  status("Refreshing device credentials...",false,true);
+
+  const refreshed=await request("/api/credentials/refresh",{
+   method:"POST",
+   headers:{"Content-Type":"application/json"},
+   body:JSON.stringify({
+    addresses:mismatches.map(d=>d.address)
+   })
+  });
+
+  alert(
+   `Credential Refresh\n\n${refreshed.message}\n`+
+   `Keys updated: ${refreshed.count}`
+  );
+
+  status(refreshed.message);
+
+ }catch(e){
+  status("Credential verification/refresh: "+e.message,true);
  }
 }
 
