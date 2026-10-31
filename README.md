@@ -276,9 +276,37 @@ The interface supports:
 - Managing multiple Tuya cloud accounts.
 - Retrieving cloud device information and local keys.
 - Scanning the local network for Tuya devices.
+- Verifying configured Local Keys against Tuya Cloud.
+- Repairing mismatched Local Keys after user confirmation.
 - Viewing device inventory and managing selected devices.
 - Testing devices and restarting the node server.
 - Changing the administrator password.
+
+### Verify and Refresh Device Credentials
+
+Click **Verify Credentials** in the web interface to compare the
+Local Keys of all configured devices against your Tuya Cloud accounts.
+
+The results indicate whether each device's credentials match,
+are mismatched, cannot be found, cannot be verified, or contain
+conflicting or invalid Cloud information.
+
+Verification is read-only and does not change device settings.
+
+If mismatched keys are detected, the interface offers to
+**Refresh Credentials**. After confirmation, the plugin retrieves
+the current Local Keys directly from Tuya Cloud and updates only
+the mismatched keys in PG3x Custom Parameters.
+
+Device IDs, names, IP addresses, protocol versions, and IoX node
+addresses remain unchanged. Replacement keys are not displayed
+in the verification results.
+
+**Important:** Restart the Smart Life / Tuya node server after
+refreshing credentials to apply the corrected keys.
+
+If Cloud retrieval fails or valid matching device information
+is unavailable, credentials are not automatically changed.
 
 Sessions expire after one hour of inactivity. Password recovery
 requires SSH access to the eisy or Polisy and the device's SSH

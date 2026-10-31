@@ -93,6 +93,21 @@ python3 tuya_auth.py reset</code></pre>
 </ul>
 <p>Discovered devices are displayed in the device inventory with their names, types, Device IDs, IP addresses, protocol versions, discovery sources, and Local Keys.</p>
 
+<h3>Credential Verification and Repair</h3>
+<p>Use the <strong>Verify Credentials</strong> button to compare the Local Keys of all configured devices against the keys returned by your configured Tuya Cloud accounts.</p>
+<ul>
+<li><strong>Match:</strong> The configured Local Key agrees with Tuya Cloud.</li>
+<li><strong>Mismatch:</strong> The configured Local Key differs from Tuya Cloud.</li>
+<li><strong>Not found:</strong> The device was not found in the configured Cloud accounts.</li>
+<li><strong>Unverified:</strong> A Cloud account error prevented complete verification.</li>
+<li><strong>Conflict or invalid:</strong> Cloud returned conflicting or invalid key information.</li>
+</ul>
+<p>Verification is read-only and does not modify device settings.</p>
+<p>If mismatched keys are detected, the interface offers to <strong>Refresh Credentials</strong>. After user confirmation, the plugin retrieves the current keys from Tuya Cloud and updates only the mismatched Local Keys in PG3x Custom Parameters.</p>
+<p>Device IDs, IP addresses, names, protocol versions, and IoX node addresses are preserved. Credentials are not updated automatically, and replacement keys are not displayed in the verification results.</p>
+<div class="callout ok"><strong>After refreshing credentials:</strong> Restart the Smart Life / Tuya node server to apply the corrected keys. Devices with matching credentials require no changes.</div>
+
+
 <h3>6. Device Inventory and Configuration</h3>
 <p>The inventory allows you to review discovered devices and manage the devices configured for the plugin.</p>
 <ul>
@@ -402,7 +417,8 @@ Done.</code></pre>
 <section class="card"><h2>Troubleshooting</h2>
 <ul>
 <li>If a fan's IP address changes, update the corresponding <code>fan*_ip</code> parameter or use a DHCP reservation.</li>
-<li>If a device is reset, removed, or re-paired, its Local Key may change. Run the TinyTuya wizard again to obtain the current key.</li>
+<li><strong>Device Local Key changed:</strong> If a device is reset, removed, or re-paired, its Local Key may change. Use <strong>Verify Credentials</strong> in the HTML interface to check configured keys against Tuya Cloud. If a mismatch is detected, confirm the offered credential refresh and restart the node server. The TinyTuya wizard remains an alternative for retrieving keys manually.</li>
+<li><strong>Credential verification unavailable:</strong> Check that your Tuya Cloud developer accounts are configured correctly and can retrieve the device. Missing, invalid, or conflicting Cloud keys cannot be refreshed automatically.</li>
 <li><strong>Local communication failure:</strong> if a fan continues to work through the Smart Life/Tuya app but stops responding to the plugin, completely power-cycle the fan/controller by removing AC power and restoring it. A full power cycle can restore local LAN communication.</li>
 <li>After changing Custom Parameters, restart the plugin.</li>
 <li><strong>Web page unavailable:</strong> verify that the node server is running and that TCP port 8767 is reachable from your browser.</li>
@@ -480,7 +496,7 @@ Done.</code></pre>
 
 <section class="card"><h2>Version</h2>
 <p><strong>Current version: 1.4.0</strong></p>
-<p class="small">Version 1.4.0 adds the HTTPS web configuration interface, first-time administrator password setup, authenticated sessions, password changes and recovery, cloud account management, device discovery, local network scanning, device inventory, configuration management, and automatic web-server startup and shutdown. Existing ceiling fan, power-monitoring switch, simple outlet, and dehumidifier support is retained.</p>
+<p class="small">Version 1.4.0 adds the HTTPS web configuration interface, first-time administrator password setup, authenticated sessions, password changes and recovery, cloud account management, device discovery, local network scanning, device inventory, configuration management, credential verification and confirmed Local Key repair, improved LAN discovery, and automatic web-server startup and shutdown. Existing ceiling fan, power-monitoring switch, simple outlet, and dehumidifier support is retained.</p>
 </section>
 
 </main>
