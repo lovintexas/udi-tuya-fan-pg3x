@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.4.1
+
+- Added verification of configured Local Keys against Tuya Cloud.
+- Added confirmed repair of mismatched Local Keys without changing
+  device IDs, IP addresses, names, or IoX node addresses.
+- Added safeguards against missing, invalid, or conflicting Cloud keys.
+- Improved LAN discovery reliability using TinyTuya's default scan settings.
+- Enlarged progress indicators and improved verification results.
+- Updated web configuration and Store documentation.
+
 ## 1.4.0
 
 - Added an HTTPS web configuration interface on port 8767.

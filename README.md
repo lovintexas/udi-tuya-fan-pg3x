@@ -256,7 +256,7 @@ Configuration is stored in PG3x Custom Parameters rather than in this repository
 
 ## Version
 
-Current version: 1.4.0
+Current version: 1.4.1
 
 ## Web Configuration Interface
 
