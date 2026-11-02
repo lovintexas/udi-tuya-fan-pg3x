@@ -27,6 +27,18 @@ def recovery_path(base_dir):
     return auth_directory(base_dir) / "web_recovery.txt"
 
 
+
+def ensure_backup_access(base_dir):
+    """Allow eisy-ui backups to read an existing credential file."""
+    path = credential_path(base_dir)
+    if not path.is_file():
+        return
+    subprocess.run(
+        ["setfacl", "-m", "u:eisyui:r:allow", str(path)],
+        check=True,
+    )
+
+
 def atomic_write(path, content):
     path = Path(path)
     fd, temporary = tempfile.mkstemp(

@@ -1,6 +1,7 @@
 import json
 import os
 import secrets
+import subprocess
 import threading
 import time
 from pathlib import Path
@@ -55,6 +56,12 @@ import signal
 
 @asynccontextmanager
 async def web_lifespan(app):
+    from tuya_auth import ensure_backup_access
+    try:
+        ensure_backup_access(BASE)
+    except (OSError, subprocess.CalledProcessError) as exc:
+        print(f"Warning: unable to grant eisy-ui backup access: {exc}")
+
     original_parent = os.getppid()
 
     async def monitor_parent():
