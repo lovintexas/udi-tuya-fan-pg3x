@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.4.2
+
+- Added a private configuration bridge between the HTTPS web editor and the node server.
+- Synchronized HTML editor changes with PG3x custom parameters, including readback verification.
+- Added node-server restart and IoX node deletion through the configuration bridge.
+- Improved configuration inventory handling and web-session status messages.
+- Preserved eisy-ui backup access to administrator authentication files after credential updates.
+
 ## 1.4.1
 
 - Added verification of configured Local Keys against Tuya Cloud.

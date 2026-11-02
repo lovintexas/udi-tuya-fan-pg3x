@@ -256,7 +256,14 @@ Configuration is stored in PG3x Custom Parameters rather than in this repository
 
 ## Version
 
-Current version: 1.4.1
+Current version: 1.4.2
+
+Version 1.4.2 improves reliability of the HTTPS configuration editor by
+synchronizing changes directly with the running node server and PG3x custom
+parameters. Configuration writes are verified by readback. The editor also
+supports node-server restart and IoX node deletion, with improved inventory
+handling and authentication-file backup permissions.
+
 
 ## Web Configuration Interface
 
