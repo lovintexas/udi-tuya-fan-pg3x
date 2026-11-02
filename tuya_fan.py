@@ -942,6 +942,14 @@ class Controller(udi_interface.Node):
                     "obtaining the Tuya Device ID and Local Key."
                 )
 
+                # Publish an empty inventory for first-time setup.
+                inventory_file = Path(__file__).resolve().parent / "tuya_inventory.json"
+                temp_file = inventory_file.with_suffix(".tmp")
+                temp_file.write_text(json.dumps({"devices": []}, indent=2))
+                os.chmod(temp_file, 0o600)
+                temp_file.replace(inventory_file)
+
+                LOGGER.info("Published empty Tuya device inventory")
                 self.setDriver("ST", 0)
                 return
 
@@ -1122,6 +1130,9 @@ class Controller(udi_interface.Node):
 controller = None
 pending_params = {}
 
+from tuya_config_sync import ConfigSync
+config_sync = ConfigSync()
+
 pending_deletions = {}
 pending_deletions_lock = threading.Lock()
 
@@ -1141,38 +1152,7 @@ def delete_node_done(result):
         event.set()
 
 
-def custom_request_handler(request):
-    if not isinstance(request, dict):
-        return
-
-    request_id = request.get("requestId")
-    payload = request.get("payload")
-
-    if not isinstance(request_id, str) or not isinstance(payload, dict):
-        return
-
-    if payload.get("action") == "restart_ns":
-        LOGGER.info(
-            "Restart requested for this node server "
-            "(UUID=%s, slot=%s)",
-            polyglot.uuid, polyglot.profileNum
-        )
-
-        polyglot.customResponse(
-            request_id,
-            {"restarting": True, "profileNum": polyglot.profileNum}
-        )
-
-        polyglot.send({"restart": {}}, "system")
-        return
-
-    if payload.get("action") != "delete_node":
-        polyglot.customResponseError(
-            request_id, errorMessage="Unsupported request", status=400
-        )
-        return
-
-    address = payload.get("address")
+def delete_tuya_node(address):
     valid_types = ("fan", "switch", "outlet", "dehumidifier")
 
     if not isinstance(address, str) or not any(
@@ -1180,40 +1160,23 @@ def custom_request_handler(request):
         for device_type in valid_types
         for n in range(1, 17)
     ):
-        polyglot.customResponseError(
-            request_id, errorMessage="Invalid node address", status=400
-        )
-        return
-
-    if address not in polyglot.nodes_internal:
-        polyglot.customResponseError(
-            request_id, errorMessage="Node not found", status=404
-        )
-        return
+        raise ValueError("Invalid node address")
 
     event = threading.Event()
 
     with pending_deletions_lock:
         if address in pending_deletions:
-            polyglot.customResponseError(
-                request_id, errorMessage="Deletion already in progress",
-                status=409
-            )
-            return
+            raise RuntimeError("Deletion already in progress")
+        if address not in polyglot.nodes_internal:
+            raise LookupError("Node not found")
         pending_deletions[address] = event
 
     try:
         polyglot.delNode(address)
 
         if not event.wait(20):
-            polyglot.customResponseError(
-                request_id,
-                errorMessage="Timed out waiting for IoX node deletion",
-                status=504
-            )
-            return
+            raise TimeoutError("Timed out waiting for IoX node deletion")
 
-        # Update the web-interface inventory after confirmed IoX deletion.
         inventory_file = Path(__file__).resolve().parent / "tuya_inventory.json"
         inventory = json.loads(inventory_file.read_text())
         devices = inventory.get("devices")
@@ -1237,19 +1200,75 @@ def custom_request_handler(request):
         temp_file.replace(inventory_file)
 
         LOGGER.info("Removed %s from Tuya inventory", address)
+        return {"address": address, "deleted": True}
 
-        polyglot.customResponse(
-            request_id, {"address": address, "deleted": True}
-        )
-
-    except Exception as ex:
-        LOGGER.exception("Failed to delete node %s", address)
-        polyglot.customResponseError(
-            request_id, errorMessage="Node deletion failed", status=500
-        )
     finally:
         with pending_deletions_lock:
             pending_deletions.pop(address, None)
+
+
+def restart_tuya_node_server():
+    LOGGER.info(
+        "Restart requested through private bridge (UUID=%s, slot=%s)",
+        polyglot.uuid, polyglot.profileNum
+    )
+
+    def perform_restart():
+        import time
+        time.sleep(1)
+        polyglot.send({"restart": {}}, "system")
+
+    threading.Thread(
+        target=perform_restart,
+        daemon=True
+    ).start()
+
+    return {"restarting": True, "profileNum": polyglot.profileNum}
+
+
+def custom_request_handler(request):
+    if not isinstance(request, dict):
+        return
+
+    request_id = request.get("requestId")
+    payload = request.get("payload")
+
+    if not isinstance(request_id, str) or not isinstance(payload, dict):
+        return
+
+    if payload.get("action") == "restart_ns":
+        LOGGER.info(
+            "Restart requested (UUID=%s, slot=%s)",
+            polyglot.uuid, polyglot.profileNum
+        )
+        polyglot.customResponse(
+            request_id,
+            {"restarting": True, "profileNum": polyglot.profileNum}
+        )
+        polyglot.send({"restart": {}}, "system")
+        return
+
+    if payload.get("action") != "delete_node":
+        polyglot.customResponseError(
+            request_id, errorMessage="Unsupported request", status=400
+        )
+        return
+
+    try:
+        result = delete_tuya_node(payload.get("address"))
+        polyglot.customResponse(request_id, result)
+    except Exception as ex:
+        LOGGER.exception("Node deletion failed")
+        status = (
+            400 if isinstance(ex, ValueError)
+            else 404 if isinstance(ex, LookupError)
+            else 504 if isinstance(ex, TimeoutError)
+            else 409 if str(ex) == "Deletion already in progress"
+            else 500
+        )
+        polyglot.customResponseError(
+            request_id, errorMessage=str(ex), status=status
+        )
 
 
 def custom_params_handler(params):
@@ -1257,10 +1276,16 @@ def custom_params_handler(params):
 
     LOGGER.info("Received custom parameters")
     pending_params = dict(params)
+    config_sync.update(pending_params)
 
     if controller is not None:
         controller.configure(pending_params)
 
+
+
+def config_done_handler():
+    config_sync.mark_ready()
+    LOGGER.info("Initial PG3x configuration received")
 
 
 def poll_handler(poll_type):
@@ -1323,10 +1348,31 @@ def stop_web_editor():
 
 atexit.register(stop_web_editor)
 
+config_bridge = None
+
+
+def stop_config_bridge():
+    global config_bridge
+
+    if config_bridge is None:
+        return
+
+    config_bridge.shutdown()
+    config_bridge.server_close()
+    config_bridge = None
+
+    socket_path = Path(__file__).resolve().parent / "tuya_config.sock"
+    if socket_path.is_socket():
+        socket_path.unlink()
+
+
+atexit.register(stop_config_bridge)
+
 
 def stop_handler():
     LOGGER.info("Smart Life / Tuya plugin stopping")
     stop_web_editor()
+    stop_config_bridge()
     polyglot.stop()
 
 
@@ -1355,6 +1401,11 @@ if __name__ == "__main__":
         polyglot.subscribe(
             polyglot.CUSTOMPARAMS,
             custom_params_handler
+        )
+
+        polyglot.subscribe(
+            polyglot.CONFIGDONE,
+            config_done_handler
         )
 
         polyglot.subscribe(
@@ -1387,6 +1438,17 @@ if __name__ == "__main__":
         time.sleep(1)
 
         controller.start()
+
+        # Start the private PG3x configuration bridge.
+        from tuya_config_bridge import start_bridge
+        config_bridge = start_bridge(
+            Path(__file__).resolve().parent,
+            config_sync,
+            polyglot,
+            delete_callback=delete_tuya_node,
+            restart_callback=restart_tuya_node_server
+        )
+        LOGGER.info("Tuya configuration bridge started")
 
         start_web_editor()
 

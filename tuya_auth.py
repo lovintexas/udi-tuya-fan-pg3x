@@ -3,6 +3,7 @@ import hashlib
 import hmac
 import os
 import secrets
+import subprocess
 import sys
 import tempfile
 import time
@@ -38,6 +39,13 @@ def atomic_write(path, content):
             output.flush()
             os.fsync(output.fileno())
         os.chmod(temporary, 0o600)
+
+        if path.name == "web_auth.txt":
+            subprocess.run(
+                ["setfacl", "-m", "u:eisyui:r:allow", temporary],
+                check=True,
+            )
+
         os.replace(temporary, path)
     finally:
         if os.path.exists(temporary):

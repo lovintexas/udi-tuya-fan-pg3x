@@ -35,93 +35,17 @@ def plugin_api_path(endpoint):
 
 
 def read_eisy_customparams():
-    import socket
-    import http.client
+    from tuya_config_bridge import request_bridge
+    return request_bridge(BASE, "read")
 
-    class UnixConnection(http.client.HTTPConnection):
-        def connect(self):
-            self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-            self.sock.connect("/tmp/eisyui-listener")
-
-    conn = UnixConnection("localhost", timeout=5)
-    try:
-        conn.request("GET", plugin_api_path("custom/customparams"))
-        response = conn.getresponse()
-        body = response.read()
-        if response.status != 200:
-            raise RuntimeError(f"eisy-ui returned HTTP {response.status}")
-        return json.loads(body)
-    finally:
-        conn.close()
-
-
-
-def request_eisy_plugin(payload, timeout=30000):
-    import socket
-    import http.client
-
-    class UnixConnection(http.client.HTTPConnection):
-        def connect(self):
-            self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-            self.sock.connect("/tmp/eisyui-listener")
-
-    conn = UnixConnection("localhost", timeout=(timeout / 1000) + 5)
-    try:
-        conn.request(
-            "POST",
-            plugin_api_path("request"),
-            body=json.dumps({"payload": payload, "timeout": timeout}),
-            headers={"Content-Type": "application/json"}
-        )
-        response = conn.getresponse()
-        body = response.read()
-
-        if response.status != 200:
-            raise RuntimeError(
-                f"eisy-ui plugin request returned HTTP {response.status}: "
-                f"{body.decode(errors='replace')[:300]}"
-            )
-
-        result = json.loads(body)
-        if result.get("successful") is not True:
-            raise RuntimeError("eisy-ui plugin request was unsuccessful")
-
-        return result.get("data")
-
-    finally:
-        conn.close()
 
 
 def write_eisy_customparams(params):
-    import socket
-    import http.client
-
+    from tuya_config_bridge import request_bridge
     if not isinstance(params, dict):
         raise ValueError("Custom parameters must be a dictionary")
-
-    class UnixConnection(http.client.HTTPConnection):
-        def connect(self):
-            self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-            self.sock.connect("/tmp/eisyui-listener")
-
-    conn = UnixConnection("localhost", timeout=5)
-    try:
-        conn.request(
-            "POST",
-            plugin_api_path("custom/customparams"),
-            body=json.dumps(params),
-            headers={"Content-Type": "application/json"}
-        )
-        response = conn.getresponse()
-        body = response.read()
-        if response.status != 200:
-            raise RuntimeError(f"eisy-ui returned HTTP {response.status}")
-        result = json.loads(body)
-        if result.get("successful") is not True:
-            raise RuntimeError("eisy-ui rejected custom parameters")
-        return result
-    finally:
-        conn.close()
+    confirmed = request_bridge(BASE, "write", params)
+    return {"successful": True, "data": confirmed}
 
 
 from contextlib import asynccontextmanager
@@ -493,10 +417,7 @@ def restart_node_server():
             if INVENTORY_FILE.exists() else 0
         )
 
-        result = request_eisy_plugin(
-            {"action": "restart_ns"},
-            timeout=30000
-        )
+        result = request_bridge(BASE, "restart_ns", timeout=30)
 
         if not isinstance(result, dict) or not result.get("restarting"):
             raise RuntimeError("Node server did not confirm restart")
@@ -791,9 +712,9 @@ def delete_device(r: DeleteDeviceRequest):
                     )
 
             try:
-                result = request_eisy_plugin(
-                    {"action": "delete_node", "address": r.address},
-                    timeout=30000,
+                result = request_bridge(
+                    BASE, "delete_node",
+                    address=r.address, timeout=30
                 )
             except Exception as ex:
                 raise HTTPException(
@@ -1536,6 +1457,7 @@ async function loginUser(){
   if(!r.ok)throw Error("Invalid username or password");
   document.getElementById("loginPassword").value="";
   showEditor();
+  status("");
   await loadAccounts();
   await loadInventory();
  }catch(e){
@@ -1663,6 +1585,7 @@ async function loadInventory(){
 
   inventoryLoaded = true;
   render();
+  status("");
  }catch(e){
   status("Could not load configured-device inventory: "+e.message,true);
  }
