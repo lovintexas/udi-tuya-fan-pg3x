@@ -256,7 +256,9 @@ Configuration is stored in PG3x Custom Parameters rather than in this repository
 
 ## Version
 
-Current version: 1.4.2
+Current version: 1.4.3
+
+Version 1.4.3 automatically repairs backup read permissions on existing HTTPS administrator credential files at web-server startup.
 
 Version 1.4.2 improves reliability of the HTTPS configuration editor by
 synchronizing changes directly with the running node server and PG3x custom

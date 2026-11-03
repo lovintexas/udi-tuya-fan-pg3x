@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.4.3
+
+- Automatically repair eisy-ui backup read permissions on existing HTTPS administrator credential files when the web server starts.
+- Preserve existing credentials without requiring a password reset.
+
 ## 1.4.2
 
 - Added a private configuration bridge between the HTTPS web editor and the node server.
