@@ -54,6 +54,7 @@
         </cmd>
 
         <cmd id="QUERY"/>
+        <cmd id="POLLDEVICE"/>
       </accepts>
     </cmds>
   </nodeDef>
@@ -76,6 +77,7 @@
         <cmd id="DON"/>
         <cmd id="DOF"/>
         <cmd id="QUERY"/>
+        <cmd id="POLLDEVICE"/>
       </accepts>
     </cmds>
   </nodeDef>
@@ -92,6 +94,7 @@
         <cmd id="DON"/>
         <cmd id="DOF"/>
         <cmd id="QUERY"/>
+        <cmd id="POLLDEVICE"/>
       </accepts>
     </cmds>
   </nodeDef>
@@ -128,6 +131,7 @@
       <cmd id="SET_TEMP_UNIT"><p id="" editor="dhtempunit"/></cmd>
       <cmd id="RESET_FILTER"/><cmd id="RESET_RUNTIME"/>
       <cmd id="QUERY"/>
+      <cmd id="POLLDEVICE"/>
     </accepts></cmds>
   </nodeDef>
 </nodeDefs>

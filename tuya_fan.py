@@ -236,6 +236,7 @@ class TuyaFan(udi_interface.Node):
         "SET_BRIGHTNESS": set_brightness,
         "SET_TIMER": set_timer,
         "QUERY": query_command,
+        "POLLDEVICE": query_command,
     }
 
 
@@ -353,6 +354,7 @@ class TuyaPowerSwitch(udi_interface.Node):
         "DON": switch_on,
         "DOF": switch_off,
         "QUERY": query_command,
+        "POLLDEVICE": query_command,
     }
 
 
@@ -446,6 +448,7 @@ class TuyaOutlet(udi_interface.Node):
         "DON": switch_on,
         "DOF": switch_off,
         "QUERY": query_command,
+        "POLLDEVICE": query_command,
     }
 
 
@@ -580,6 +583,7 @@ class TuyaDehumidifier(udi_interface.Node):
         "SET_DH_TIMER": set_timer, "SET_TEMP_UNIT": set_unit,
         "RESET_FILTER": reset_filter, "RESET_RUNTIME": reset_runtime,
         "QUERY": query_command,
+        "POLLDEVICE": query_command,
     }
 
 
@@ -1396,7 +1400,7 @@ if __name__ == "__main__":
             polyglot.uuid, polyglot.profileNum
         )
 
-        polyglot.start("1.4.3")
+        polyglot.start("1.4.4")
 
         polyglot.subscribe(
             polyglot.CUSTOMPARAMS,

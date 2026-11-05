@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.4.4
+- Added a Poll Device command to individual fans, switches, outlets, and dehumidifiers.
+- Poll Device requests fresh status from only the selected device.
+- Preserved existing Query commands and automatic polling behavior.
+
 ## 1.4.3
 
 - Automatically repair eisy-ui backup read permissions on existing HTTPS administrator credential files when the web server starts.
