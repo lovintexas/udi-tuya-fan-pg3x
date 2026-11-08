@@ -296,6 +296,7 @@ class TuyaPowerSwitch(udi_interface.Node):
 
             if "dps" not in result:
                 LOGGER.error(f"{self.name}: bad status response: {result}")
+                self.setDriver("GV6", 0)
                 return False
 
             dps = result["dps"]
@@ -318,14 +319,15 @@ class TuyaPowerSwitch(udi_interface.Node):
             if "26" in dps:
                 self.setDriver("GV5", 0 if int(dps["26"]) == 0 else 1)
 
-            if "66" in dps:
-                self.setDriver("GV6", 1 if dps["66"] == "online" else 0)
+            # Successful LAN status response means the device is online.
+            self.setDriver("GV6", 1)
 
             LOGGER.debug(f"{self.name}: DPS {dps}")
             return True
 
         except Exception as ex:
             LOGGER.error(f"{self.name}: query failed: {ex}")
+            self.setDriver("GV6", 0)
             return False
 
     def _set(self, value):

@@ -37,7 +37,10 @@ def plugin_api_path(endpoint):
 
 def read_eisy_customparams():
     from tuya_config_bridge import request_bridge
-    return request_bridge(BASE, "read")
+    params = request_bridge(BASE, "read")
+    if not isinstance(params, dict):
+        raise ValueError("Invalid configuration bridge response")
+    return {"successful": True, "data": params}
 
 
 
@@ -780,15 +783,41 @@ def cloud_devices(account: str):
         result = cloud.getdevices()
         if not isinstance(result, list):
             raise ValueError("Invalid cloud response")
-        return {"devices": [{
-            "name": d.get("name", ""),
-            "category": d.get("category", ""),
-            "id": d.get("id", ""),
-            "ip": d.get("ip", ""),
-            "version": d.get("version", ""),
-            "key": d.get("key", ""),
-            "source": "Cloud"
-        } for d in result if isinstance(d, dict)]}
+        devices = []
+        meter_codes = {"cur_voltage", "cur_current", "cur_power", "add_ele"}
+
+        for d in result:
+            if not isinstance(d, dict):
+                continue
+
+            record = {
+                "name": d.get("name", ""),
+                "category": d.get("category", ""),
+                "id": d.get("id", ""),
+                "ip": d.get("ip", ""),
+                "version": d.get("version", ""),
+                "key": d.get("key", ""),
+                "source": "Cloud",
+                "hasPowerMonitoring": None
+            }
+
+            if d.get("category") == "cz" and d.get("id"):
+                try:
+                    response = cloud.getstatus(d["id"])
+                    if isinstance(response, dict) and response.get("success"):
+                        statuses = response.get("result", [])
+                        if isinstance(statuses, list):
+                            record["hasPowerMonitoring"] = any(
+                                isinstance(item, dict)
+                                and item.get("code") in meter_codes
+                                for item in statuses
+                            )
+                except Exception:
+                    pass
+
+            devices.append(record)
+
+        return {"devices": devices}
     except Exception:
         raise HTTPException(502, "Cloud retrieval failed; check account credentials")
 
@@ -1824,7 +1853,7 @@ function detectDeviceType(d){
 
  // Tuya sockets may or may not support power monitoring.
  // Don't assume every socket has metering.
- if(["cz"].includes(category))return "Outlet";
+ if(["cz"].includes(category))return d.hasPowerMonitoring===true?"Switch":"Outlet";
 
  // Switch category alone doesn't establish metering support.
  return "Switch";
