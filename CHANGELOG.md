@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.4.5
+
+- Automatically detect Tuya smart plugs with energy monitoring and classify them as Power Monitors.
+- Correct Power Monitor Online status using successful local communication instead of DPS 66.
+- Fix HTML configuration editor readback through the eisy-ui configuration bridge.
+- Preserve manual device-type selections and existing configurations.
+
+
 ## 1.4.4
 - Added a Poll Device command to individual fans, switches, outlets, and dehumidifiers.
 - Poll Device requests fresh status from only the selected device.
