@@ -1222,9 +1222,11 @@ Create Administrator Password
 <label>Username</label>
 <input id="loginUser" value="admin" autocomplete="username">
 <label>Password</label>
+<form onsubmit="event.preventDefault(); loginUser();">
 <input id="loginPassword" type="password"
        autocomplete="current-password">
-<button class="primary" onclick="loginUser()">Login</button>
+<button class="primary" type="submit">Login</button>
+</form>
 <button type="button" onclick="showRecovery()">Forgot Password?</button>
 
 <div id="recoveryPanel" style="display:none;margin-top:20px">
@@ -2280,11 +2282,45 @@ if __name__ == "__main__":
     if not cert.is_file() or not key.is_file():
         raise RuntimeError(f"HTTPS certificate or key missing for slot {profile}")
 
-    uvicorn.run(
-        app,
-        host="0.0.0.0",
-        port=8767,
-        ssl_certfile=str(cert),
-        ssl_keyfile=str(key),
-        access_log=False
-    )
+    from tuya_https_gateway import serve as serve_gateway
+
+    async def run_servers():
+        config = uvicorn.Config(
+            app,
+            host="127.0.0.1",
+            port=18767,
+            ssl_certfile=str(cert),
+            ssl_keyfile=str(key),
+            access_log=False
+        )
+        server = uvicorn.Server(config)
+
+        uvicorn_task = asyncio.create_task(server.serve())
+        gateway_task = None
+
+        try:
+            while not server.started:
+                if uvicorn_task.done():
+                    await uvicorn_task
+                    raise RuntimeError("Uvicorn stopped before startup")
+                await asyncio.sleep(0.05)
+
+            gateway_task = asyncio.create_task(serve_gateway())
+
+            done, pending = await asyncio.wait(
+                (uvicorn_task, gateway_task),
+                return_when=asyncio.FIRST_COMPLETED
+            )
+
+            for task in done:
+                await task
+
+        finally:
+            if gateway_task is not None:
+                gateway_task.cancel()
+                await asyncio.gather(gateway_task, return_exceptions=True)
+
+            server.should_exit = True
+            await asyncio.gather(uvicorn_task, return_exceptions=True)
+
+    asyncio.run(run_servers())

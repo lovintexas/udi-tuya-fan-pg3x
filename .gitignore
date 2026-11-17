@@ -27,3 +27,6 @@ tuya_identity.json
 # Local development backups
 *.v1
 *.bak
+
+# Local Python virtual environment
+.venv/
