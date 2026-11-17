@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.4.6
+
+- Automatically redirect HTTP to HTTPS on web editor port 8767.
+- Allow pressing Enter in the password field to log in.
+- Preserve existing HTTPS authentication and CSRF protection.
+
 ## 1.4.5
 
 - Automatically detect Tuya smart plugs with energy monitoring and classify them as Power Monitors.
