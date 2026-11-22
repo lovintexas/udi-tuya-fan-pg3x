@@ -1569,6 +1569,7 @@ let showKeys = false;
 const selectedDevices = new Set();
 const deviceTypes = new Map();
 let currentDevices = new Map();
+const deviceDiagnostics = new Map();
 const configuredDevices = new Map();
 
 let replacementTarget = null;
@@ -1981,8 +1982,29 @@ function render(){
   download.style.display="none";
   testWrapper.appendChild(download);
 
+  function updateDownload(){
+   const diagnostic=deviceDiagnostics.get(d.id);
+   download.style.display=diagnostic?"":"none";
+   download.onclick=diagnostic?()=>{
+    const blob=new Blob(
+     [JSON.stringify(diagnostic,null,2)],
+     {type:"application/json"}
+    );
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");
+    a.href=url;
+    a.download="tuya-device-"+d.id+".json";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),1000);
+   }:null;
+  }
+  updateDownload();
+
   test.onclick=async()=>{
-   download.style.display="none";
+   deviceDiagnostics.delete(d.id);
+   updateDownload();
    test.disabled=true;
    test.replaceChildren();
    const spinner=document.createElement("span");
@@ -2006,21 +2028,8 @@ function render(){
       protocol_version:String(d.version),
       dps:result.dps
      };
-     download.onclick=()=>{
-      const blob=new Blob(
-       [JSON.stringify(diagnostic,null,2)],
-       {type:"application/json"}
-      );
-      const url=URL.createObjectURL(blob);
-      const a=document.createElement("a");
-      a.href=url;
-      a.download="tuya-device-"+d.id+".json";
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(()=>URL.revokeObjectURL(url),1000);
-     };
-     download.style.display="";
+     deviceDiagnostics.set(d.id,diagnostic);
+     updateDownload();
     }
     if(result.ok && replacementTarget && eligibleReplacement){
      testedReplacementId=d.id;
