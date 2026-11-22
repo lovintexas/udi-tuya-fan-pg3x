@@ -1114,7 +1114,8 @@ def test_device(d: TestDevice):
 
         return {"ok": True, "ms": elapsed,
                 "message": "Connected",
-                "dps_count": len(result["dps"])}
+                "dps_count": len(result["dps"]),
+                "dps": result["dps"]}
     except Exception:
         return {"ok": False, "message": "Connection failed"}
     finally:
@@ -1974,7 +1975,14 @@ function render(){
    b.disabled=true;
   }
 
+  const download=document.createElement("button");
+  download.textContent="Download JSON";
+  download.style.marginLeft="6px";
+  download.style.display="none";
+  testWrapper.appendChild(download);
+
   test.onclick=async()=>{
+   download.style.display="none";
    test.disabled=true;
    test.replaceChildren();
    const spinner=document.createElement("span");
@@ -1990,6 +1998,30 @@ function render(){
       id:d.id,ip:d.ip,key:key,version:String(d.version)
      })
     });
+    if(result.ok && result.dps){
+     const diagnostic={
+      name:d.name||"Unnamed",
+      type:typeSelect.value,
+      device_id:d.id,
+      protocol_version:String(d.version),
+      dps:result.dps
+     };
+     download.onclick=()=>{
+      const blob=new Blob(
+       [JSON.stringify(diagnostic,null,2)],
+       {type:"application/json"}
+      );
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement("a");
+      a.href=url;
+      a.download="tuya-device-"+d.id+".json";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(()=>URL.revokeObjectURL(url),1000);
+     };
+     download.style.display="";
+    }
     if(result.ok && replacementTarget && eligibleReplacement){
      testedReplacementId=d.id;
      test.textContent="Use as Replacement";
