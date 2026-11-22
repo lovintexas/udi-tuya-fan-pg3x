@@ -36,6 +36,25 @@ footer{padding:0 22px 35px;color:var(--muted);font-size:13px}@media(max-width:65
 <div class="callout ok"><strong>Smart Life / Tuya:</strong> devices are initially paired and associated with a Smart Life or Tuya account. After the Device ID and Local Key are obtained, normal plugin operation is local.</div>
 </section>
 
+<section class="card"><h2>Version 1.4.7 — Device JSON Export</h2>
+<p class="lead">Download raw Tuya device status data directly from the HTTPS configuration interface to help identify and support additional Smart Life / Tuya devices.</p>
+
+<h3>Downloading Device JSON</h3>
+<ol>
+<li>Open the HTTPS configuration interface and log in.</li>
+<li>Discover the device through Tuya Cloud and scan the local network if necessary.</li>
+<li>Click <strong>Test Connection</strong> beside the device.</li>
+<li>After a successful connection, click <strong>Download JSON</strong>.</li>
+<li>Save the JSON file and provide it when requesting support for a new device type.</li>
+</ol>
+
+<p>The JSON file includes the device name, selected type, Device ID, protocol version, and reported DPS values. The device does not need to be added to IoX.</p>
+
+<div class="callout"><strong>Security:</strong> Local Keys and Tuya Cloud credentials are excluded. Review the file before sharing, since device status values may contain other information.</div>
+
+<p><strong>Note:</strong> The export contains the device's currently reported DPS values, not necessarily every supported command or parameter.</p>
+</section>
+
 <section class="card"><h2>Version 1.4.1 — Web Configuration Interface</h2>
 
 <p class="lead">Version 1.4.1 includes the browser-based HTTPS configuration interface, Tuya Cloud credential verification, confirmed Local Key repair, and improved LAN discovery.</p>
@@ -495,7 +514,8 @@ Done.</code></pre>
 </section>
 
 <section class="card"><h2>Version</h2>
-<p><strong>Current version: 1.4.6</strong></p>
+<p><strong>Current version: 1.4.7</strong></p>
+<p class="small">Version 1.4.7 adds downloadable device DPS JSON diagnostics through the HTTPS configuration interface.</p>
 <p class="small">Version 1.4.3 automatically repairs eisy-ui backup read permissions on existing administrator credential files.</p>
 <p class="small">Version 1.4.2 improves HTTPS editor reliability with synchronized PG3x configuration reads and verified writes, node-server restart and IoX node deletion support, improved device inventory handling, and authentication backup permission fixes.</p>
 

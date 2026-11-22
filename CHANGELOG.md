@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.4.7
+
+- Added Download JSON button after a successful device connection test in the HTML configuration interface.
+- Export device name, selected type, device ID, protocol version, and raw Tuya DPS values.
+- Allow users to collect diagnostic data for unsupported Tuya devices without SSH access or adding them to IoX.
+- Exclude local keys and cloud credentials from downloaded JSON files.
+- Preserve existing connection testing and device replacement functionality.
+
 ## 1.4.6
 
 - Automatically redirect HTTP to HTTPS on web editor port 8767.
