@@ -1,4 +1,7 @@
 import json
+import ipaddress
+import socket
+from concurrent.futures import ThreadPoolExecutor
 import os
 import secrets
 import subprocess
@@ -395,9 +398,12 @@ def get_inventory():
             for d in saved.get("devices", [])
         }
 
+        params = read_eisy_customparams()["data"]
+
         return {"devices": [
             {"id": d["id"], "name": d["name"], "type": d["type"],
              "address": d["address"],
+             "ip": params.get(f'{d["address"]}_ip', ""),
              "managed_by": (
                  "html"
                  if html_addresses.get(d["address"]) == d["id"]
@@ -406,6 +412,95 @@ def get_inventory():
             for d in data.get("devices", [])
         ]}
 
+
+
+class IPUpdateRequest(BaseModel):
+    address: str
+    id: str
+    ip: str
+    old_ip: str
+
+
+@app.post("/api/update_ip", dependencies=[Depends(authenticate)])
+def update_device_ip(r: IPUpdateRequest):
+    valid_addresses = {
+        f"{kind}{n}"
+        for kind in ("fan", "switch", "outlet", "dehumidifier")
+        for n in range(1, 17)
+    }
+
+    if r.address not in valid_addresses:
+        raise HTTPException(400, "Invalid node address")
+
+    try:
+        new_ip = str(ipaddress.IPv4Address(r.ip))
+    except ValueError:
+        raise HTTPException(400, "Invalid IPv4 address")
+
+    with lock:
+        params = read_eisy_customparams()["data"].copy()
+        prefix = r.address
+
+        if params.get(f"{prefix}_id") != r.id:
+            raise HTTPException(409, "Configured device ID has changed")
+
+        old_ip = params.get(f"{prefix}_ip", "")
+
+        if old_ip != r.old_ip:
+            raise HTTPException(409, "Saved IP has changed. Refresh and retry.")
+
+        if old_ip == new_ip:
+            raise HTTPException(409, "IP address is already current")
+
+        key = params.get(f"{prefix}_key")
+        version = str(params.get(f"{prefix}_version", ""))
+
+        if not key or version not in ("3.3", "3.4", "3.5"):
+            raise HTTPException(409, "Authenticated IP update unavailable")
+
+        device = None
+
+        try:
+            device = tinytuya.Device(r.id, new_ip, key)
+            device.set_version(float(version))
+            device.set_socketTimeout(3)
+            device.set_socketRetryLimit(1)
+            device.set_socketPersistent(False)
+            result = device.status()
+
+            if not isinstance(result, dict) or not isinstance(
+                result.get("dps"), dict
+            ) or not result["dps"]:
+                raise HTTPException(
+                    409, "Device authentication at new IP failed"
+                )
+
+        except HTTPException:
+            raise
+        except Exception:
+            raise HTTPException(409, "Could not connect to new IP")
+        finally:
+            if device is not None:
+                try:
+                    device.close()
+                except Exception:
+                    pass
+
+        params[f"{prefix}_ip"] = new_ip
+        write_eisy_customparams(params)
+
+        confirmed = read_eisy_customparams()["data"]
+
+        if confirmed.get(f"{prefix}_ip") != new_ip:
+            raise HTTPException(502, "IP update could not be confirmed")
+
+        return {
+            "ok": True,
+            "address": prefix,
+            "old_ip": old_ip,
+            "ip": new_ip,
+            "message": "IP updated. Restart node server to apply."
+        }
 
 
 class ReplacementRequest(BaseModel):
@@ -420,6 +515,7 @@ class ReplacementRequest(BaseModel):
 @app.post("/api/restart", dependencies=[Depends(authenticate)])
 def restart_node_server():
     import time
+    from tuya_config_bridge import request_bridge
 
     try:
         before = (
@@ -1083,6 +1179,294 @@ def scan():
 
 
 
+
+# Remote subnet discovery
+SCAN_SETTINGS_FILE = BASE / "tuya_scan_settings.json"
+scan_lock = threading.Lock()
+
+
+
+def scan_tcp_devices(networks, credentials):
+    """Identify Tuya devices using authenticated status requests."""
+
+    def port_open(ip):
+        try:
+            with socket.create_connection((ip, 6668), timeout=1.5):
+                return ip
+        except OSError:
+            return None
+
+    def probe(ip, record, version):
+        device = None
+        try:
+            device = tinytuya.Device(
+                record["id"], ip, record["key"]
+            )
+            device.set_version(float(version))
+            device.set_socketTimeout(3)
+            device.set_socketRetryLimit(1)
+            device.set_socketPersistent(False)
+            result = device.status()
+
+            if isinstance(result, dict) and isinstance(
+                result.get("dps"), dict
+            ) and result["dps"]:
+                return {
+                    "id": record["id"],
+                    "gwId": record["id"],
+                    "name": record.get("name", ""),
+                    "ip": ip,
+                    "version": version
+                }
+        except Exception:
+            pass
+        finally:
+            if device is not None:
+                try:
+                    device.close()
+                except Exception:
+                    pass
+        return None
+
+    def identify(ip, records):
+        for record in records:
+            version = str(record.get("version") or "")
+            versions = (
+                [version] if version in ("3.1", "3.3", "3.4", "3.5")
+                else ["3.5", "3.4", "3.3"]
+            )
+
+            for ver in versions:
+                # Protocol 3.1 status does not reliably authenticate identity.
+                if ver == "3.1":
+                    continue
+                result = probe(ip, record, ver)
+                if result:
+                    return result
+        return None
+
+    addresses = sorted({
+        str(ip)
+        for subnet in networks
+        for ip in ipaddress.ip_network(subnet).hosts()
+    }, key=ipaddress.ip_address)
+
+    address_set = set(addresses)
+    known = {}
+
+    for record in credentials:
+        ip = record.get("ip")
+        if ip in address_set:
+            known.setdefault(ip, []).append(record)
+
+    with ThreadPoolExecutor(max_workers=32) as executor:
+        candidates = {
+            ip for ip in executor.map(port_open, addresses) if ip
+        }
+
+        # Retry configured IP addresses missed during initial port scan.
+        missed = sorted(set(known) - candidates)
+        candidates.update(
+            ip for ip in executor.map(port_open, missed) if ip
+        )
+
+    results = {}
+    matched = set()
+
+    # Pass 1: authenticate devices at their last known IP addresses.
+    known_candidates = sorted(candidates.intersection(known))
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        found = executor.map(
+            lambda ip: identify(ip, known[ip]),
+            known_candidates
+        )
+
+        for ip, result in zip(known_candidates, found):
+            if result and result["id"] not in matched:
+                results[ip] = result
+                matched.add(result["id"])
+
+    # Pass 2: locate devices whose IP addresses may have changed.
+    remaining_ips = sorted(candidates - set(results))
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        for offset in range(0, len(remaining_ips), 8):
+            remaining = [
+                r for r in credentials if r["id"] not in matched
+            ]
+            if not remaining:
+                break
+
+            batch = remaining_ips[offset:offset + 8]
+            found = executor.map(
+                lambda ip: identify(ip, remaining),
+                batch
+            )
+
+            for ip, result in zip(batch, found):
+                if result and result["id"] not in matched:
+                    results[ip] = result
+                    matched.add(result["id"])
+
+    return results
+
+
+class ScanCredentials(BaseModel):
+    id: str
+    key: str
+    name: str = ""
+    ip: str = ""
+    version: str = ""
+
+
+class NetworkScanRequest(BaseModel):
+    subnets: str = ""
+    discover_local: bool = True
+    devices: list[ScanCredentials] = []
+
+
+@app.get("/api/scan/settings", dependencies=[Depends(authenticate)])
+def get_scan_settings():
+    if SCAN_SETTINGS_FILE.exists():
+        return json.loads(SCAN_SETTINGS_FILE.read_text())
+    return {"subnets": "", "discover_local": True}
+
+
+@app.post("/api/scan", dependencies=[Depends(authenticate)])
+def scan_networks(request: NetworkScanRequest):
+    networks = []
+    private_ranges = [
+        ipaddress.ip_network("10.0.0.0/8"),
+        ipaddress.ip_network("172.16.0.0/12"),
+        ipaddress.ip_network("192.168.0.0/16"),
+    ]
+
+    try:
+        for entry in request.subnets.split(","):
+            entry = entry.strip()
+            if not entry:
+                continue
+            network = ipaddress.ip_network(entry, strict=False)
+            if network.version != 4:
+                raise ValueError()
+            if not any(network.subnet_of(r) for r in private_ranges):
+                raise ValueError()
+            if network.num_addresses > 1024:
+                raise ValueError()
+            if str(network) not in networks:
+                networks.append(str(network))
+
+        if sum(ipaddress.ip_network(n).num_addresses
+               for n in networks) > 4096:
+            raise ValueError()
+
+    except ValueError:
+        raise HTTPException(
+            400, "Enter private IPv4 subnets in CIDR notation, "
+                 "with at most 1024 addresses per subnet "
+                 "and 4096 addresses total."
+        )
+
+    if not networks and not request.discover_local:
+        raise HTTPException(400, "Select at least one network to scan")
+
+    if not scan_lock.acquire(blocking=False):
+        raise HTTPException(409, "A network scan is already running")
+
+    try:
+        credentials = {}
+
+        if networks:
+            with lock:
+                response = read_eisy_customparams()
+                params = response["data"]
+
+            for kind in ("fan", "switch", "outlet", "dehumidifier"):
+                for n in range(1, 17):
+                    address = f"{kind}{n}"
+                    device_id = params.get(f"{address}_id")
+                    key = params.get(f"{address}_key")
+                    if device_id and key:
+                        credentials[device_id] = {
+                            "id": device_id,
+                            "key": key,
+                            "name": params.get(f"{address}_name") or address,
+                            "ip": params.get(f"{address}_ip") or "",
+                            "version": params.get(f"{address}_version") or ""
+                        }
+
+            for d in request.devices:
+                if d.id and d.key:
+                    existing = credentials.get(d.id, {})
+                    credentials[d.id] = {
+                        "id": d.id,
+                        "key": d.key,
+                        "name": existing.get("name") or d.name or d.id,
+                        "ip": existing.get("ip") or d.ip,
+                        "version": existing.get("version") or d.version
+                    }
+
+            if not credentials:
+                raise HTTPException(
+                    400, "Remote scanning requires local keys. "
+                         "Retrieve cloud devices first."
+                )
+
+        settings = {
+            "subnets": ", ".join(networks),
+            "discover_local": request.discover_local
+        }
+
+        tmp = SCAN_SETTINGS_FILE.with_suffix(".tmp")
+        tmp.write_text(json.dumps(settings))
+        tmp.replace(SCAN_SETTINGS_FILE)
+
+        if not networks:
+            result = tinytuya.deviceScan(
+                verbose=False, color=False
+            )
+        else:
+            result = {}
+
+            if request.discover_local:
+                result = tinytuya.deviceScan(
+                    verbose=False, color=False
+                )
+
+            local_ids = {
+                d.get("gwId") or d.get("id")
+                for d in result.values()
+                if isinstance(d, dict)
+            }
+
+            remaining = [
+                d for d in credentials.values()
+                if d["id"] not in local_ids
+            ]
+
+            if remaining:
+                result.update(
+                    scan_tcp_devices(networks, remaining)
+                )
+
+        return {"devices": [{
+            "name": d.get("name", ""),
+            "id": d.get("gwId") or d.get("id", ""),
+            "ip": d.get("ip", ip),
+            "version": d.get("version", ""),
+            "key": "",
+            "source": "LAN"
+        } for ip, d in result.items() if isinstance(d, dict)]}
+
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(502, "Network discovery failed")
+    finally:
+        scan_lock.release()
+
+
 class TestDevice(BaseModel):
     id: str
     ip: str
@@ -1193,6 +1577,11 @@ button:disabled{opacity:.55;cursor:wait}
  display:inline-block;margin:12px;
 }
 #restartModal button{margin-top:16px}
+#restartBtn.restart-required{
+ background:#d97706;color:white;
+ border-color:#b45309;font-weight:bold;
+}
+#restartModalMessage{font-size:18px;line-height:1.5}
 
 #loginScreen{max-width:400px;margin:10vh auto}
 #loginScreen section{box-shadow:0 4px 20px #0001}
@@ -1297,11 +1686,24 @@ background:#0008;z-index:10000;align-items:center;justify-content:center">
 <div class="actions">
 <select id="accounts"></select>
 <button class="primary" onclick="getCloud()">Retrieve Cloud Devices &amp; Keys</button>
-<button onclick="scanLAN()">Scan Local Network</button>
+<button id="scanBtn" onclick="scanLAN()">Scan Networks</button>
 <button onclick="verifyCredentials()">Verify Credentials</button>
 <button id="restartBtn" onclick="restartNodeServer()">Restart Node Server</button>
 <button onclick="toggleKeys()">Show / Hide Keys</button>
 </div>
+<div style="margin-top:15px">
+<label for="scanSubnets">Additional Network Subnets (optional)</label>
+<input id="scanSubnets"
+ placeholder="192.168.20.0/24, 192.168.30.0/24"
+ autocomplete="off">
+<p class="note">Enter comma-separated IPv4 subnets in CIDR notation.
+Leave blank for normal local network discovery.</p>
+<label style="display:flex;align-items:center;gap:8px;font-weight:normal">
+<input type="checkbox" id="discoverLocal" checked style="width:auto">
+Include local network discovery
+</label>
+</div>
+<p id="scanResult" class="note" style="font-size:18px;font-weight:bold"></p>
 <p id="status" class="note"></p>
 <div style="overflow-x:auto">
 <table><thead><tr>
@@ -1499,6 +1901,7 @@ async function loginUser(){
   status("");
   await loadAccounts();
   await loadInventory();
+  await loadScanSettings();
  }catch(e){
   showLogin(e.message);
  }
@@ -1530,6 +1933,7 @@ async function initializeAuthentication(){
    showEditor();
    await loadAccounts();
    await loadInventory();
+   await loadScanSettings();
   }else{
    showLogin();
   }
@@ -1625,7 +2029,6 @@ async function loadInventory(){
 
   inventoryLoaded = true;
   render();
-  status("");
  }catch(e){
   status("Could not load configured-device inventory: "+e.message,true);
  }
@@ -1714,7 +2117,25 @@ async function getCloud(){
  }catch(e){status(e.message,true)}
 }
 
+function setRestartRequired(required){
+ const btn=document.getElementById("restartBtn");
+ btn.classList.toggle("restart-required",required);
+ btn.textContent=required
+  ?"Restart Node Server — Required"
+  :"Restart Node Server";
+}
+
+function showRestartRequired(message){
+ setRestartRequired(true);
+ showRestartModal(message,false);
+ document.getElementById("restartModalOK").style.display="none";
+ document.getElementById("restartModalNow").style.display="inline-block";
+ document.getElementById("restartModalLater").style.display="inline-block";
+}
+
 function showRestartModal(message,busy){
+ document.getElementById("restartModalNow").style.display="none";
+ document.getElementById("restartModalLater").style.display="none";
  const modal=document.getElementById("restartModal");
  document.getElementById("restartModalMessage").textContent=message;
  document.getElementById("restartModalSpinner").style.display=
@@ -1727,8 +2148,8 @@ function closeRestartModal(){
  document.getElementById("restartModal").classList.remove("show");
 }
 
-async function restartNodeServer(){
- if(!confirm(
+async function restartNodeServer(skipConfirm=false){
+ if(!skipConfirm && !confirm(
   "Restart the Smart Life / Tuya node server?\n\n"+
   "All devices will temporarily go offline."
  ))return;
@@ -1749,6 +2170,7 @@ async function restartNodeServer(){
   selectedDevices.clear();
   await loadInventory();
   render();
+  setRestartRequired(false);
   status(result.message);
   showRestartModal(result.message,false);
  }catch(e){
@@ -1818,13 +2240,51 @@ async function verifyCredentials(){
  }
 }
 
-async function scanLAN(){
+async function loadScanSettings(){
  try{
-  status("Scanning local network...",false,true);
-  const d=await request("/api/scan");
-  lanRecords=d.devices;render();
-  status(`${lanRecords.length} LAN devices discovered.`);
- }catch(e){status(e.message,true)}
+  const d=await request("/api/scan/settings");
+  document.getElementById("scanSubnets").value=d.subnets||"";
+  document.getElementById("discoverLocal").checked=d.discover_local!==false;
+ }catch(e){
+  status("Could not load network scan settings: "+e.message,true);
+ }
+}
+
+async function scanLAN(){
+ const btn=document.getElementById("scanBtn");
+ const scanResult=document.getElementById("scanResult");
+ scanResult.textContent="";
+ btn.disabled=true;
+ try{
+  const subnets=val("scanSubnets").trim();
+  const discoverLocal=document.getElementById("discoverLocal").checked;
+
+  status(subnets
+   ?"Scanning additional subnets. This may take several minutes..."
+   :"Scanning local network...",false,true);
+
+  const d=await request("/api/scan",{
+   method:"POST",
+   headers:{"Content-Type":"application/json"},
+   body:JSON.stringify({
+    subnets:subnets,
+    discover_local:discoverLocal,
+    devices:subnets?cloudRecords.filter(d=>d.id&&d.key).map(d=>({
+     id:d.id,key:d.key,name:d.name||d.id,
+     ip:String(d.ip||""),version:String(d.version||"")
+    })):[]
+   })
+  });
+
+  lanRecords=d.devices;
+  render();
+  scanResult.textContent=`${lanRecords.length} LAN devices discovered.`;
+  status("");
+ }catch(e){
+  status(e.message,true);
+ }finally{
+  btn.disabled=false;
+ }
 }
 function toggleKeys(){showKeys=!showKeys;render()}
 function addCell(tr,value){
@@ -2064,6 +2524,23 @@ function render(){
   td.appendChild(testWrapper);
 
   if(configured && inventoryLoaded && !replacementTarget){
+   const info=configuredDevices.get(d.id);
+   const discovered=lanRecords.find(x=>x.id===d.id);
+
+   if(info.ip && discovered && discovered.ip &&
+      info.ip!==discovered.ip){
+    const update=document.createElement("button");
+    update.textContent="Update IP";
+    update.className="primary";
+    update.style.marginLeft="6px";
+    update.title="Saved IP: "+info.ip+
+     " — Discovered IP: "+discovered.ip;
+    update.onclick=()=>updateDeviceIP(info,discovered.ip,update);
+    td.appendChild(update);
+   }
+  }
+
+  if(configured && inventoryLoaded && !replacementTarget){
    const replace=document.createElement("button");
    replace.textContent="Replace";
    replace.style.marginLeft="6px";
@@ -2116,6 +2593,51 @@ async function deleteHtmlDevice(info){
   await refreshAfterChange(result.message);
  }catch(e){
   status("Deletion failed: "+e.message,true);
+ }
+}
+
+async function updateDeviceIP(info,newIP,btn){
+ if(!confirm(
+  "Update IP address for "+info.name+"?\n\n"+
+  "Current IP: "+info.ip+"\n"+
+  "New IP: "+newIP+"\n\n"+
+  "Existing IoX node and programs will be preserved.\n"+
+  "Restart the node server after saving."
+ ))return;
+
+ btn.disabled=true;
+
+ try{
+  status("Verifying and updating IP address...",false,true);
+
+  const result=await request("/api/update_ip",{
+   method:"POST",
+   headers:{"Content-Type":"application/json"},
+   body:JSON.stringify({
+    address:info.address,
+    id:info.id,
+    old_ip:info.ip,
+    ip:newIP
+   })
+  });
+
+  await loadInventory();
+
+  status(
+   "IP updated for "+info.name+" ("+result.address+"). "+
+   result.old_ip+" → "+result.ip+
+   ". Restart node server to apply."
+  );
+
+  showRestartRequired(
+   "IP address updated successfully for "+info.name+
+   ". Restart the node server to apply the change."
+  );
+
+ }catch(e){
+  status("IP update failed: "+e.message,true);
+ }finally{
+  btn.disabled=false;
  }
 }
 
@@ -2303,6 +2825,12 @@ setInterval(() => {
   <p id="restartModalMessage"></p>
   <button id="restartModalOK" class="primary"
           onclick="closeRestartModal()" style="display:none">OK</button>
+  <button id="restartModalNow" class="primary"
+          onclick="restartNodeServer(true)"
+          style="display:none">Restart Now</button>
+  <button id="restartModalLater"
+          onclick="closeRestartModal()"
+          style="display:none">Restart Later</button>
  </div>
 </div>
 

@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.4.8
+
+- Added optional cross-subnet and VLAN discovery using authenticated TCP connections on port 6668.
+- Support multiple private IPv4 subnets using comma-separated CIDR notation.
+- Retain optional local UDP discovery and remember network scan settings.
+- Improve scan performance through parallel probing and prioritization of known device IP addresses.
+- Improve discovery reliability with longer connection timeouts and retries for configured IP addresses.
+- Add Update IP functionality for configured devices discovered at a new IP address.
+- Verify communication at the new IP before updating configuration while preserving the existing IoX node.
+- Display persistent, larger network discovery results.
+- Add Restart Now and Restart Later options after IP updates.
+- Highlight the restart button until a successful restart.
+- Fix a missing configuration bridge import in the HTML restart function.
+
 ## 1.4.7
 
 - Added Download JSON button after a successful device connection test in the HTML configuration interface.

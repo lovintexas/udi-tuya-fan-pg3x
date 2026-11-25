@@ -36,6 +36,58 @@ footer{padding:0 22px 35px;color:var(--muted);font-size:13px}@media(max-width:65
 <div class="callout ok"><strong>Smart Life / Tuya:</strong> devices are initially paired and associated with a Smart Life or Tuya account. After the Device ID and Local Key are obtained, normal plugin operation is local.</div>
 </section>
 
+<section class="card"><h2>Version 1.4.8 — Cross-Subnet Discovery and IP Address Migration</h2>
+
+<p class="lead">Discover Smart Life / Tuya devices across routed networks and isolated IoT VLANs without forwarding UDP broadcasts. Update existing device IP addresses without replacing their IoX nodes.</p>
+
+<h3>Scanning Additional Networks</h3>
+<ol>
+<li>Open the HTTPS configuration interface and log in.</li>
+<li>Retrieve Cloud Devices &amp; Keys if additional device credentials are needed.</li>
+<li>Enter one or more additional private IPv4 subnets in CIDR notation, separated by commas.</li>
+<li>Leave <strong>Include local network discovery</strong> checked to combine local UDP discovery with additional subnet scanning.</li>
+<li>Click <strong>Scan Networks</strong> and wait for the discovery results.</li>
+</ol>
+
+<table>
+<tr><th>Example</th><th>Purpose</th></tr>
+<tr><td><code>192.168.11.0/24</code></td><td>Scan an entire subnet</td></tr>
+<tr><td><code>192.168.11.45/32</code></td><td>Scan one specific IP address</td></tr>
+<tr><td><code>192.168.11.0/24, 192.168.20.0/24</code></td><td>Scan multiple subnets</td></tr>
+</table>
+
+<p>Leave the additional subnet field blank and enable local network discovery to use traditional UDP discovery. Network scan settings are remembered between scans.</p>
+
+<h3>Firewall Requirements</h3>
+<div class="callout ok">
+<strong>Allow TCP port 6668</strong> from the eisy or Polisy IP address to the destination IoT network, including established return traffic.
+UDP broadcast forwarding is not required for authenticated TCP discovery.
+</div>
+
+<p>TCP discovery requires valid Local Keys and supports Tuya protocols 3.3, 3.4 and 3.5. Protocol 3.1 devices can still use traditional local discovery but are excluded from authenticated TCP identification.</p>
+
+<p>Each additional subnet is limited to 1024 addresses, with a combined limit of 4096 addresses. Scan duration depends on network size, device responsiveness and available credentials.</p>
+
+<h3>Updating an Existing Device IP Address</h3>
+<ol>
+<li>Move the device to its new network or allow it to obtain a new IP address.</li>
+<li>Ensure the device is reachable from the eisy or Polisy.</li>
+<li>Scan the destination network.</li>
+<li>Locate the existing device and click <strong>Update IP</strong>.</li>
+<li>Review the old and new IP addresses and confirm the change.</li>
+<li>Select <strong>Restart Now</strong> or <strong>Restart Later</strong>.</li>
+</ol>
+
+<p>The plugin verifies communication using the existing Local Key before saving the new IP address. The existing Device ID, name, protocol version and IoX node address remain unchanged, preserving existing program and scene references.</p>
+
+<p>Scanning alone does not modify saved device configurations. The Update IP operation requires explicit confirmation.</p>
+
+<p>When migrating multiple devices, select Restart Later and update each device before restarting once. The restart button remains highlighted during the current browser session until a successful restart.</p>
+
+<div class="callout"><strong>Troubleshooting:</strong> If a device is not discovered, verify its IP address, firewall access to TCP port 6668, Wi-Fi connectivity and Local Key. Some devices may require a power cycle if their local communication service stops responding.</div>
+
+</section>
+
 <section class="card"><h2>Version 1.4.7 — Device JSON Export</h2>
 <p class="lead">Download raw Tuya device status data directly from the HTTPS configuration interface to help identify and support additional Smart Life / Tuya devices.</p>
 
@@ -514,7 +566,8 @@ Done.</code></pre>
 </section>
 
 <section class="card"><h2>Version</h2>
-<p><strong>Current version: 1.4.7</strong></p>
+<p><strong>Current version: 1.4.8</strong></p>
+<p class="small">Version 1.4.8 adds cross-subnet discovery and existing-device IP address migration.</p>
 <p class="small">Version 1.4.7 adds downloadable device DPS JSON diagnostics through the HTTPS configuration interface.</p>
 <p class="small">Version 1.4.3 automatically repairs eisy-ui backup read permissions on existing administrator credential files.</p>
 <p class="small">Version 1.4.2 improves HTTPS editor reliability with synchronized PG3x configuration reads and verified writes, node-server restart and IoX node deletion support, improved device inventory handling, and authentication backup permission fixes.</p>

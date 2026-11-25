@@ -256,7 +256,7 @@ Configuration is stored in PG3x Custom Parameters rather than in this repository
 
 ## Version
 
-Current version: 1.4.3
+Current version: 1.4.8
 
 Version 1.4.3 automatically repairs backup read permissions on existing HTTPS administrator credential files at web-server startup.
 
@@ -492,3 +492,25 @@ new key.
 
 TinyTuya and Tuya are third-party projects/services and their setup
 procedures may change over time.
+
+
+### Cross-Subnet Discovery and IP Address Migration
+
+Version 1.4.8 supports authenticated TCP discovery across routed
+networks and IoT VLANs through the HTTPS configuration interface.
+
+- Enter additional private IPv4 subnets in CIDR notation.
+- Separate multiple subnets with commas.
+- Optionally combine TCP discovery with normal local UDP discovery.
+- Allow TCP port 6668 from eisy or Polisy to the IoT network.
+- Retrieve valid Local Keys before scanning unconfigured devices.
+- Authenticated TCP discovery supports protocols 3.3, 3.4 and 3.5.
+
+When an existing device is discovered at a different IP address,
+use Update IP to verify and save its new address while preserving
+its existing IoX node and program references.
+
+Restart the node server after updating device IP addresses.
+Multiple IP updates can be completed before a single restart.
+
+See PLUGIN_GUIDE.html for detailed instructions.
